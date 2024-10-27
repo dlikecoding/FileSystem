@@ -1,19 +1,41 @@
+/**************************************************************
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen
+* Student IDs:: 923091933
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
+* Project:: Basic File System
+*
+* File:: DE.c
+*
+* Description:: Directory Entry is a data structure that stores metadata for 
+* a file or directory in the filesystem. It includes information such as creation, 
+* modification, and access timestamps; file size; entry type (file or directory); 
+* usage status; file name; and an array of extents that specify the locations of 
+* data blocks on disk
+*
+**************************************************************/
+
 #include "structs/DE.h"
 
-
-// create a new directory with specified number of entries
+/** Initializes a new directory structure in memory with a specified number of entries as 
+ * a subdirectory of a given parent directory. It calculates required space, allocates memory,
+ * sets up initial entries for current (".") and parent ("..") links, and writes the directory 
+ * to disk.
+ * @return a pointer to the created directory or NULL if failure */
 directory_entry *create_directory(int numEntries, directory_entry *parent) {
-    // calculate required space
+
+    // Calculate memory needed for dir entries based on count and block size
     int bytesNeeded = numEntries * sizeof(directory_entry);
     int blocksNeeded = computeBlockNeeded(bytesNeeded, BLOCK_SIZE);
     int actualBytes = blocksNeeded * BLOCK_SIZE;
     int actualEntries = actualBytes / sizeof(directory_entry);
 
-    // allocate memory for directory entries
+    // Allocate memory for new directory entries
     directory_entry *newDirectory = (directory_entry *)malloc(actualBytes);
     if (newDirectory == NULL) return NULL;
 
-    // allocate free blocks for the directory from freespace map
+    // Get free blocks on disk location from FS map for this directory
     extent_st* blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded).extents;
     if (blocksLoc == NULL) {
         free(newDirectory);
@@ -22,7 +44,7 @@ directory_entry *create_directory(int numEntries, directory_entry *parent) {
 
     extent_st blockLocation = blocksLoc[0];
 
-    // initialize directory entries
+    // Initialize ifself and parent directory entries
     for (int i = 2; i < actualEntries; i++) {
         newDirectory[i].is_used = 0;
         newDirectory[i].file_name[0] = UNUSED_ENTRY_MARKER;  // Mark entry as unused
@@ -30,19 +52,19 @@ directory_entry *create_directory(int numEntries, directory_entry *parent) {
 
     time_t currentTime = time(NULL);
 
-    // initialize root directory entry "."
+    // Initialize root directory entry "."
     createDirHelper(newDirectory[0], ".", blockLocation,
         actualEntries * sizeof(directory_entry), 1, 1, currentTime,
         currentTime, currentTime);
 
-    // Initialize parent directory entry ".." - If no parent, default to self
+    // Initialize parent directory entry ".." - If no parent, point to self
     if (parent == NULL) parent = newDirectory;
 
     createDirHelper(newDirectory[1], "..", parent[0].block_location,
         parent[0].file_size, parent[0].is_directory, 1, parent[0].creation_time,
         parent[0].access_time, parent[0].modification_time);
 
-    // Write directory to disk
+    // Write created directory structure to disk
     int writeStatus = writeDirHelper(newDirectory);
     if (writeStatus == -1) {
         free(newDirectory);
@@ -52,6 +74,7 @@ directory_entry *create_directory(int numEntries, directory_entry *parent) {
     return newDirectory;
 }
 
+// Specified metadata, including name, location, size, type, usage status, and timestamps
 void createDirHelper(directory_entry de, char *fName, extent_st loc, int fSize, int isDir, 
                                     int isUsed, time_t ctime, time_t mTime, time_t aTime) {
     
@@ -65,12 +88,12 @@ void createDirHelper(directory_entry de, char *fName, extent_st loc, int fSize, 
     de.modification_time = ctime;
 }
 
-
-// Function to write directory to disk (LBAwrite is assumed to be a provided function)
+/** Writes a directory to disk at the specified location. 
+ * @return 0 on success or -1 on failure.*/
 int writeDirHelper(directory_entry *newDir) {
     int blocks = computeBlockNeeded(newDir[0].file_size, BLOCK_SIZE);
 
-    if (LBAwrite(newDir, blocks, newDir[0].block_location.startLoc) < 0) return -1;
+    if (LBAwrite(newDir, blocks, newDir[0].block_location.startLoc) < blocks) return -1;
     return 0;
 }
 

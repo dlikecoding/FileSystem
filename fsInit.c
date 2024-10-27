@@ -1,9 +1,9 @@
 /**************************************************************
-* Class::  CSC-415-0# Spring 2024
-* Name:: 
-* Student IDs::
-* GitHub-Name::
-* Group-Name::
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen
+* Student IDs:: 923091933
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
 * Project:: Basic File System
 *
 * File:: fsInit.c
@@ -13,7 +13,6 @@
 * This file is where you will start and initialize your system
 *
 **************************************************************/
-
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -29,11 +28,13 @@
 
 #define SIGNATURE 6565676850526897110
 
+volume_control_block * vcb;
+
 int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	{
 	printf ("Initializing File System with %ld blocks with a block size of %ld\n", numberOfBlocks, blockSize);
 	/* TODO: Add any code you need to initialize your file system. */
-
+	
 	//Allocate first block on the disk into memory which store vcb struct
 	vcb = malloc(blockSize);
 	if (vcb == NULL) return -1;
@@ -58,7 +59,7 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 		
 		// printf("AFTER : totalFreeBs: %d, extentsLen: %d \n", vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength);
 
-		releaseBlocks(17900, 100);
+		// releaseBlocks(17900, 100);
 		// free(getBlocks.extents);
 		// getBlocks.extents = NULL;
 
@@ -76,7 +77,6 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	int initFSStatus = initFreeSpace(numberOfBlocks, blockSize);
 	if (initFSStatus != 0) return -1;
 
-	
 	//Assume DirectoryEntry loc start after FreeSpace loc
 	// vcb->root_loc = vcb->total_fs_blocks + 1;
 	
@@ -92,5 +92,8 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	
 void exitFileSystem ()
 	{
+	free(vcb);
+	vcb = NULL;
+
 	printf ("System exiting\n");
 	}

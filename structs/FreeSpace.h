@@ -1,3 +1,21 @@
+/**************************************************************
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen
+* Student IDs:: 923091933
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
+* Project:: Basic File System
+*
+* File:: FreeSpace.h
+*
+* Description:: Managing the free space map in a filesystem. The 
+* freespace_st structure tracks available blocks on disk, fs map location
+* store on disk, length of extents, total blocks reserved in FreeSpace and 
+* fragmentation levels. It also contains flags indicating the status of 
+* secondary and tertiary extents
+*
+**************************************************************/
+
 #ifndef _FREESPACE_H
 #define _FREESPACE_H
 
@@ -39,8 +57,6 @@ void releaseFSMap();
 int calBlocksNeededFS(int numberOfBlocks, int blockSize, double fragmentPerc);
 void addExtent(int startLoc, int countBlock);
 void removeExtent( int startLoc );
-int mergeExtent(int startLoc, int countBlock);
-
 
 void releaseReqBlocks(extents_st reqBlocks);
 // int findLBABlockLocation(int n, int nBlock);

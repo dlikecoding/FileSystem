@@ -1,3 +1,21 @@
+/**************************************************************
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen
+* Student IDs:: 923091933
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
+* Project:: Basic File System
+*
+* File:: DE.h
+*
+* Description:: Directory Entry is a data structure that stores metadata for 
+* a file or directory in the filesystem. It includes information such as creation, 
+* modification, and access timestamps; file size; entry type (file or directory); 
+* usage status; file name; and an array of extents that specify the locations of 
+* data blocks on disk
+*
+**************************************************************/
+
 #ifndef _DE_H
 #define _DE_H
 

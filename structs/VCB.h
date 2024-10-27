@@ -1,0 +1,30 @@
+#ifndef _VCB_H
+#define _VCB_H
+
+#define MAX_FILENAME 32
+
+#include "structs/FreeSpace.h"
+#include "structs/DE.h"
+
+/* Volume Control Block contains both persistent fields (stored on disk) and 
+runtime-only pointers */ 
+typedef struct volume_control_block {
+    // Fields stored on disk
+    char volume_name[MAX_FILENAME]; // human-readable name for the volume
+
+    unsigned long signature;    // signature for validation of the volume (LBA)
+    
+    unsigned int total_blocks;  // total number of blocks in the LBA
+    unsigned int block_size;    // size of one block in bytes
+    unsigned int root_loc;      // location of block containing the directory
+    
+    freespace_st fs_st;         // fs structure store fields to manage freespace
+
+    // Pointers for Runtime-only (NOT WRITTEN TO DISK)
+    extent_st *free_space_map;     // pointer to free space map
+    // directory_entry *root_dir_ptr; // pointer to the root directory
+
+} volume_control_block;
+
+extern volume_control_block *vcb; // declare volume control block global 
+#endif

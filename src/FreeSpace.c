@@ -88,13 +88,14 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     int loadedBlocks = loadFSMap(); // Load the free space map into memory
     if ( loadedBlocks == -1 ) return requestBlocks;
     
+    // Load only blocks contain FS Map that has extents to memory
     int maxFreeBlocks = loadedBlocks * PRIMARY_EXTENT_TB;
 
     /* NOTE: In the worst case scenarios, length of return extents could equal or 
     greater than length of extents in free space map */
-    
+
     // Allocate space for the returned extents
-    requestBlocks.extents = malloc(sizeof(extent_st) * maxFreeBlocks);
+    requestBlocks.extents = malloc( sizeof(extent_st) * maxFreeBlocks );
     if (requestBlocks.extents == NULL) {
         releaseFSMap();
         return requestBlocks;
@@ -106,8 +107,6 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
         int startLocation = vcb->free_space_map[i].startLoc;
         int availableBlocks = vcb->free_space_map[i].countBlock; 
             
-        printf("FS Loop: [%d: %d]\n", startLocation, availableBlocks);
-
         if (availableBlocks < minContinuous) continue;
 
         // if number of blocks request less than or equal count, insert the pos & count
@@ -133,9 +132,9 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             vcb->free_space_map[i].startLoc += numBlockReq;
             vcb->free_space_map[i].countBlock -= numBlockReq;
             vcb->fs_st.totalBlocksFree -= numBlockReq;
+            
             numBlockReq = 0; // All required blocks have been assigned
         }
-        printf("ffound: [%d: %d] %d\n", startLocation, availableBlocks, numBlockReq);
     }
     
     // If unable to fulfill request due to fragmentation, release allocated blocks

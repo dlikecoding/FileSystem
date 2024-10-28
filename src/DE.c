@@ -12,7 +12,7 @@
 * a file or directory in the filesystem. It includes information such as creation, 
 * modification, and access timestamps; file size; entry type (file or directory); 
 * usage status; file name; and an array of extents that specify the locations of 
-* data blocks on disk
+* data blocks on disk (For now, just one extent in a DE)
 *
 **************************************************************/
 
@@ -41,13 +41,11 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     // Get free blocks on disk location from FS map for this directory
     extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
     if (blocksLoc.extents == NULL) {
-        printf("CAN'T allocate memory for DE");
         free(newDirectory);
         return NULL;
     }
 
     extent_st blockLocation = blocksLoc.extents[0];
-    printf("Block LOCATION: [%d: %d]\n", blockLocation.startLoc, blockLocation.countBlock);
 
     // Initialize ifself and parent directory entries
     for (int i = 2; i < actualEntries; i++) {
@@ -58,16 +56,26 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     time_t currentTime = time(NULL);
 
     // Initialize root directory entry "."
-    createDirHelper(newDirectory[0], ".", blockLocation,
-        actualEntries * sizeof(directory_entry), 1, 1, currentTime,
-        currentTime, currentTime);
+    strcpy(newDirectory[0].file_name, ".");
+    newDirectory[0].block_location = blockLocation;
+    newDirectory[0].file_size = actualEntries * sizeof(directory_entry);
+    newDirectory[0].is_directory = 1;
+    newDirectory[0].is_used = 1;
+    newDirectory[0].creation_time = currentTime;
+    newDirectory[0].access_time = currentTime;
+    newDirectory[0].modification_time = currentTime;
 
     // Initialize parent directory entry ".." - If no parent, point to self
     if (parent == NULL) parent = newDirectory;
 
-    createDirHelper(newDirectory[1], "..", parent[0].block_location,
-        parent[0].file_size, parent[0].is_directory, 1, parent[0].creation_time,
-        parent[0].access_time, parent[0].modification_time);
+    strcpy(newDirectory[1].file_name, "..");
+    newDirectory[1].block_location = parent[0].block_location;
+    newDirectory[1].file_size = parent[0].file_size;
+    newDirectory[1].is_directory = parent[0].is_directory;
+    newDirectory[1].is_used = 1;
+    newDirectory[1].creation_time = parent[0].creation_time;
+    newDirectory[1].access_time = parent[0].access_time;
+    newDirectory[1].modification_time = parent[0].modification_time;
 
     // Write created directory structure to disk
     int writeStatus = writeDirHelper(newDirectory);
@@ -77,20 +85,6 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     }
 
     return newDirectory;
-}
-
-// Specified metadata, including name, location, size, type, usage status, and timestamps
-void createDirHelper(directory_entry de, char *fName, extent_st loc, int fSize, int isDir, 
-                                    int isUsed, time_t ctime, time_t mTime, time_t aTime) {
-    
-    strcpy(de.file_name, ".");
-    de.block_location = loc;
-    de.file_size = fSize;
-    de.is_directory = isDir;
-    de.is_used = isUsed;
-    de.creation_time = ctime;
-    de.access_time = ctime;
-    de.modification_time = ctime;
 }
 
 /** Writes a directory to disk at the specified location. 
@@ -103,21 +97,27 @@ int writeDirHelper(directory_entry *newDir) {
 }
 
 
-// initialize root directory entry "."
-// strcpy(newDirectory[0].file_name, ".");
-// newDirectory[0].block_location[0] = blocksLoc;
-// newDirectory[0].file_size = actualEntries * sizeof(directory_entry);
-// newDirectory[0].is_directory = 1;
-// newDirectory[0].is_used = 1;
-// newDirectory[0].creation_time = currentTime;
-// newDirectory[0].access_time = currentTime;
-// newDirectory[0].modification_time = currentTime;
+// // Initialize root directory entry "."
+// createDirHelper(newDirectory[0], ".", blockLocation,
+//     actualEntries * sizeof(directory_entry), 1, 1, currentTime,
+//     currentTime, currentTime);
 
-// strcpy(newDirectory[1].file_name, "..");
-// newDirectory[1].block_location[0] = parent[0].block_location[0];
-// newDirectory[1].file_size = parent[0].file_size;
-// newDirectory[1].is_directory = parent[0].is_directory;
-// newDirectory[1].is_used = 1;
-// newDirectory[1].creation_time = parent[0].creation_time;
-// newDirectory[1].access_time = parent[0].access_time;
-// newDirectory[1].modification_time = parent[0].modification_time;
+// // Initialize parent directory entry ".." - If no parent, point to self
+// if (parent == NULL) parent = newDirectory;
+
+// createDirHelper(newDirectory[1], "..", parent[0].block_location,
+//     parent[0].file_size, parent[0].is_directory, 1, parent[0].creation_time,
+//     parent[0].access_time, parent[0].modification_time);
+// Specified metadata, including name, location, size, type, usage status, and timestamps
+// void createDirHelper(directory_entry de, char *fName, extent_st loc, int fSize, int isDir, 
+//                                     int isUsed, time_t ctime, time_t mTime, time_t aTime) {
+    
+//     strcpy(de.file_name, ".");
+//     de.block_location = loc;
+//     de.file_size = fSize;
+//     de.is_directory = isDir;
+//     de.is_used = isUsed;
+//     de.creation_time = ctime;
+//     de.access_time = ctime;
+//     de.modification_time = ctime;
+// }

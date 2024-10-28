@@ -41,7 +41,7 @@ typedef struct {
     
     char file_name[MAX_FILENAME];       // File or directory name
     
-    extent_st block_location; // Array of extents for data blocks
+    extent_st block_location; // An of extent for data blocks (Processing... )
 } directory_entry;
 
 directory_entry *createDirectory(int numEntries, directory_entry *parent);

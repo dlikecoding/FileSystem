@@ -77,14 +77,14 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 
 	int initFSStatus = initFreeSpace(numberOfBlocks, blockSize);
 	if (initFSStatus != 0) return -1;
-
-	//Assume DirectoryEntry loc start after FreeSpace loc
-	//vcb->root_loc = vcb->total_fs_blocks + 1;
+	
 	
 	// Allocatte memory for root_dir_ptr	
 	vcb->root_dir_ptr = createDirectory(50, NULL);
-    printf("ROOT LOCATION START: [%d: %d]\n", vcb->root_dir_ptr->block_location.startLoc, \
-	vcb->root_dir_ptr->block_location.countBlock);
+
+	//DirectoryEntry location start after FreeSpace loc
+	vcb->root_loc = vcb->root_dir_ptr->block_location.startLoc;
+    
 	//Write Volumn Control Block back to the disk
 	if (LBAwrite(vcb, 1, 0) < 1) return -1; //write unsuccessed
 

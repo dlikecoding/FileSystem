@@ -37,11 +37,10 @@ int initFreeSpace(int numberOfBlocks, int blockSize) {
     vcb->fs_st.totalBlocksFree = numberOfBlocks - startFreeBlockLoc; // all available blocks
     
     // Init first extent map for fspace
-    extent_st extentMap = { startFreeBlockLoc, numberOfBlocks };
+    extent_st extentMap = { startFreeBlockLoc, vcb->fs_st.totalBlocksFree };
     vcb->fs_st.extentLength++;
-    vcb->fs_st.lastExtentSize = numberOfBlocks;
+    vcb->fs_st.lastExtentSize = vcb->fs_st.totalBlocksFree;
     
-    printf("FS init: [%d: %d]", startFreeBlockLoc, numberOfBlocks);
     // Write extent structure to disk and return -1 if failure
 	if (LBAwrite((char*) &extentMap, 1, 1) != 1) return -1; 
     return 0;
@@ -107,13 +106,14 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
         int startLocation = vcb->free_space_map[i].startLoc;
         int availableBlocks = vcb->free_space_map[i].countBlock; 
             
-        printf("FS Loop: [%d: %d]", startLocation, availableBlocks);
+        printf("FS Loop: [%d: %d]\n", startLocation, availableBlocks);
 
         if (availableBlocks < minContinuous) continue;
 
         // if number of blocks request less than or equal count, insert the pos & count
         // to extent list, and then remove this extent in primary table.
         if (availableBlocks <= numBlockReq) {
+
             // Add a new extent with location and count 
             requestBlocks.extents[requestBlocks.size++] = (extent_st) { startLocation, \
                                                             availableBlocks };
@@ -125,17 +125,17 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             numBlockReq -= availableBlocks;  // Reduce number of blocks requested
 
         } else {
-            int reqStartLoc = vcb->free_space_map[i].startLoc + \
-                                vcb->free_space_map[i].countBlock - numBlockReq;
-
             // Add a new extent with location and count
-            requestBlocks.extents[requestBlocks.size++] = (extent_st) {reqStartLoc, numBlockReq};
+            requestBlocks.extents[requestBlocks.size++] = (extent_st)\
+                                {vcb->free_space_map[i].startLoc, numBlockReq};
             
             // Update the extent in free space map to reduce its count
+            vcb->free_space_map[i].startLoc += numBlockReq;
             vcb->free_space_map[i].countBlock -= numBlockReq;
             vcb->fs_st.totalBlocksFree -= numBlockReq;
             numBlockReq = 0; // All required blocks have been assigned
         }
+        printf("ffound: [%d: %d] %d\n", startLocation, availableBlocks, numBlockReq);
     }
     
     // If unable to fulfill request due to fragmentation, release allocated blocks

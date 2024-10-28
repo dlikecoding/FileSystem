@@ -69,6 +69,10 @@ run: $(ROOTNAME)$(HW)$(FOPTION)
 vrun: $(ROOTNAME)$(HW)$(FOPTION)
 	valgrind ./$(ROOTNAME)$(HW)$(FOPTION) $(RUNOPTIONS)
 
+hex:
+	@clear
+	@Hexdump/hexdump.linux --start 18 --count 1 SampleVolume
+
 asd: 
 	@clear
 	make clean

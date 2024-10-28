@@ -21,12 +21,13 @@
 
 #include <time.h>
 
-#include "structs/VCB.h"
+//#include "structs/VCB.h"
 #include "structs/FreeSpace.h"
 #include "structs/Extent.h"
 #include "structs/fs_utils.h"
 
-#define BLOCK_SIZE vcb->block_size        
+//#define BLOCK_SIZE vcb->block_size        
+#define MAX_FILENAME 32
 #define UNUSED_ENTRY_MARKER '\0' // Marker for unused entries
 
 typedef struct {
@@ -43,7 +44,7 @@ typedef struct {
     extent_st block_location; // Array of extents for data blocks
 } directory_entry;
 
-directory_entry *create_directory(int numEntries, directory_entry *parent);
+directory_entry *createDirectory(int numEntries, directory_entry *parent);
 
 void createDirHelper(directory_entry de, char *fName, 
     extent_st loc, int fSize, int isDir, int isUsed, time_t ctime,

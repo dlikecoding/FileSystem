@@ -17,13 +17,16 @@
 **************************************************************/
 
 #include "structs/DE.h"
+#include "structs/VCB.h"
+
+#define BLOCK_SIZE vcb->block_size
 
 /** Initializes a new directory structure in memory with a specified number of entries as 
  * a subdirectory of a given parent directory. It calculates required space, allocates memory,
  * sets up initial entries for current (".") and parent ("..") links, and writes the directory 
  * to disk.
  * @return a pointer to the created directory or NULL if failure */
-directory_entry *create_directory(int numEntries, directory_entry *parent) {
+directory_entry *createDirectory(int numEntries, directory_entry *parent) {
 
     // Calculate memory needed for dir entries based on count and block size
     int bytesNeeded = numEntries * sizeof(directory_entry);
@@ -36,13 +39,15 @@ directory_entry *create_directory(int numEntries, directory_entry *parent) {
     if (newDirectory == NULL) return NULL;
 
     // Get free blocks on disk location from FS map for this directory
-    extent_st* blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded).extents;
-    if (blocksLoc == NULL) {
+    extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
+    if (blocksLoc.extents == NULL) {
+        printf("CAN'T allocate memory for DE");
         free(newDirectory);
         return NULL;
     }
 
-    extent_st blockLocation = blocksLoc[0];
+    extent_st blockLocation = blocksLoc.extents[0];
+    printf("Block LOCATION: [%d: %d]\n", blockLocation.startLoc, blockLocation.countBlock);
 
     // Initialize ifself and parent directory entries
     for (int i = 2; i < actualEntries; i++) {

@@ -40,7 +40,8 @@ int initFreeSpace(int numberOfBlocks, int blockSize) {
     extent_st extentMap = { startFreeBlockLoc, numberOfBlocks };
     vcb->fs_st.extentLength++;
     vcb->fs_st.lastExtentSize = numberOfBlocks;
-
+    
+    printf("FS init: [%d: %d]", startFreeBlockLoc, numberOfBlocks);
     // Write extent structure to disk and return -1 if failure
 	if (LBAwrite((char*) &extentMap, 1, 1) != 1) return -1; 
     return 0;
@@ -105,12 +106,14 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     for (int i = 0; i < vcb->fs_st.extentLength && numBlockReq > 0; i++) {
         int startLocation = vcb->free_space_map[i].startLoc;
         int availableBlocks = vcb->free_space_map[i].countBlock; 
-        
+            
+        printf("FS Loop: [%d: %d]", startLocation, availableBlocks);
+
         if (availableBlocks < minContinuous) continue;
 
-        // if number of blocks request greater or equal count, insert the pos & count
+        // if number of blocks request less than or equal count, insert the pos & count
         // to extent list, and then remove this extent in primary table.
-        if (numBlockReq >= availableBlocks) {
+        if (availableBlocks <= numBlockReq) {
             // Add a new extent with location and count 
             requestBlocks.extents[requestBlocks.size++] = (extent_st) { startLocation, \
                                                             availableBlocks };

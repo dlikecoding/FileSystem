@@ -16,7 +16,6 @@
 #ifndef _VCB_H
 #define _VCB_H
 
-#define MAX_FILENAME 32
 
 #include "structs/FreeSpace.h"
 #include "structs/DE.h"

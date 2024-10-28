@@ -24,8 +24,6 @@
 #include "mfs.h"
 
 #include "structs/VCB.h"
-#include "structs/FreeSpace.h"
-#include "structs/DE.h"
 
 #define SIGNATURE 6565676850526897110
 
@@ -43,26 +41,41 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	//Read first block on disk & return if error
 	if (LBAread(vcb, 1, 0) < 1) return -1;
 
+	vcb->free_space_map = NULL;
+	vcb->root_dir_ptr = NULL;
+
 	//File System is matched with current FS
 	if (vcb->signature == SIGNATURE) {
-		//Load free_space_loc to VCB ptr
-		//Load root_loc to VCB ptr
-		
-		printf("FOUND: %ld \n", vcb->signature);
-		printf("Init : totalFreeBs: %d, extentsLen: %d \n", vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength);
-		
-		// request_blocks getBlocks = allocateBlocks(300,100);
-		// if (getBlocks.extents == NULL) return 0;
+		/* TODO: Load free_space_map and root_dir_ptr location HERE */
 
-		// for (size_t i = 0; i < getBlocks.size; i++) {
-		// 	printf(" ===[%d: %d]=== \n", getBlocks.extents[i].startLoc, getBlocks.extents[i].countBlock);
+
+		// printf("FOUND: %ld \n", vcb->signature);
+		// printf("Init : totalFreeBs: %d, extentsLen: %d \n", vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength);
+		
+
+		// int loadedBlocks = loadFSMap();
+
+		// for (size_t i = 0; i < vcb->fs_st.extentLength; i++) {
+		// 	printf(" ===[%d: %d]=== \n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
 		// }
+		// printf("AFTER : lastExtentSize: %d", vcb->fs_st.lastExtentSize);
 		
 		// printf("AFTER : totalFreeBs: %d, extentsLen: %d \n", vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength);
 
-		// releaseBlocks(17900, 100);
-		// free(getBlocks.extents);
-		// getBlocks.extents = NULL;
+		
+
+		// allocateBlocks(300,0);
+		// allocateBlocks(200,0);
+		// allocateBlocks(400,0);
+		// allocateBlocks(1000,0);
+		// allocateBlocks(500,0);
+		
+		// releaseBlocks(925, 1000);
+		// releaseBlocks(325, 200);
+		
+		// releaseBlocks(25, 300);
+		// releaseBlocks(525, 400);
+
 
 		return 0;
 	}
@@ -81,10 +94,22 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	
 	// Allocatte memory for root_dir_ptr	
 	vcb->root_dir_ptr = createDirectory(50, NULL);
+	if (vcb->root_dir_ptr == NULL) return -1;
+
 
 	//DirectoryEntry location start after FreeSpace loc
 	vcb->root_loc = vcb->root_dir_ptr->block_location.startLoc;
     
+	// printf("Directory Entry:\n");
+    // printf("  File Name: %s\n", vcb->root_dir_ptr[0].file_name);
+    // printf("  Block Location: %d\n", vcb->root_dir_ptr[0].block_location.startLoc);     
+	// printf("  File Size: %d bytes\n", vcb->root_dir_ptr[0].file_size);
+    // printf("  Is Directory: %d\n", vcb->root_dir_ptr[0].is_directory);
+    // printf("  Is Used: %d\n", vcb->root_dir_ptr[0].is_used);
+    // printf("  Creation Time: %ld\n", vcb->root_dir_ptr[0].creation_time);
+    // printf("  Modification Time: %ld\n", vcb->root_dir_ptr[0].modification_time);
+    // printf("  Access Time: %ld\n", vcb->root_dir_ptr[0].access_time);
+
 	//Write Volumn Control Block back to the disk
 	if (LBAwrite(vcb, 1, 0) < 1) return -1; //write unsuccessed
 
@@ -94,6 +119,14 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	
 void exitFileSystem ()
 	{
+	releaseFSMap();
+
+	if (vcb->root_dir_ptr){
+		printf ("Release DE pointer ...\n");
+		free(vcb->root_dir_ptr);
+		vcb->root_dir_ptr = NULL;
+	}
+	
 	free(vcb);
 	vcb = NULL;
 

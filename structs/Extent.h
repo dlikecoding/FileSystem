@@ -20,7 +20,8 @@
 
 /* Structure representing a single extent of contiguous blocks.
  * - startLoc: The starting location of the contiguous block.
- * - countBlock: The number of contiguous blocks with startLoc included */
+ * - countBlock: The number of contiguous blocks with startLoc included 
+ */
 typedef struct extent_st {
     int startLoc;
     int countBlock;
@@ -28,7 +29,8 @@ typedef struct extent_st {
 
 /* Structure for managing multiple extents in block requests.
  * - extents: Pointer to an array of extent_st structures.
- * - size: The total number of extents */ 
+ * - size: The total number of extents 
+ */ 
 typedef struct extents_st {
     extent_st *extents;
     int size;

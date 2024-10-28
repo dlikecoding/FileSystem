@@ -46,10 +46,14 @@ int initFreeSpace(int numberOfBlocks, int blockSize) {
     return 0;
 }
 
-/** Loads the free space map from disk to memory
+/** Loads the free space map from disk into memory when required. If not needed, 
+ * releases the map to conserve memory.
+ * TODO: Consider modifying the behavior to retain the map in memory until the 
+ * program terminates for this project.
  * @return -1 on error, or the number of blocks loaded
-*/
+ */
 int loadFSMap() {
+    if (vcb->free_space_map) return -1; // Freespace map loaded into memory
     // Determine the blocks to read based on extent length
     int nblocksRead = computeBlockNeeded(vcb->fs_st.extentLength, PRIMARY_EXTENT_TB);
 
@@ -77,7 +81,8 @@ int loadFSMap() {
 
 /** Allocates a specified number of blocks from the free space map with a minimum
  * continuous block size, if available.
- * @return An `extents_st` struct with allocated extents or an empty struct if failure */
+ * @return An extents_st struct with allocated extents or an empty struct if failure 
+ */
 extents_st allocateBlocks(int nBlocks, int minContinuous) { 
     extents_st requestBlocks = { NULL, 0 };
 
@@ -116,6 +121,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             // Add a new extent with location and count 
             requestBlocks.extents[requestBlocks.size++] = (extent_st) { startLocation, \
                                                             availableBlocks };
+
             // Adjust the total free blocks of freespace map
             vcb->fs_st.totalBlocksFree -= availableBlocks;
             
@@ -127,7 +133,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             // Add a new extent with location and count
             requestBlocks.extents[requestBlocks.size++] = (extent_st)\
                                 {vcb->free_space_map[i].startLoc, numBlockReq};
-            
+           
             // Update the extent in free space map to reduce its count
             vcb->free_space_map[i].startLoc += numBlockReq;
             vcb->free_space_map[i].countBlock -= numBlockReq;
@@ -159,7 +165,8 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
 /** Releases blocks starting from a specified location by iterates through the 
  * free space map to check if an extent can be merged before adding it to the map. 
  * NOTE: check for overlapping extents (processing... )
- * @return -1 if fail or 0 is sucessed */
+ * @return -1 if fail or 0 is sucessed 
+ */
 int releaseBlocks(int startLoc, int nBlocks) {
     // If the specified range exceeds total blocks, return -1 if error
     if (startLoc + nBlocks > vcb->total_blocks) return -1;
@@ -199,28 +206,37 @@ int releaseBlocks(int startLoc, int nBlocks) {
     return 0;
 }
 
+// Frees memory allocated forfree space map and resets the pointer
 void releaseFSMap() {
-    free(vcb->free_space_map);
-    vcb->free_space_map = NULL;
+    if (vcb->free_space_map){
+        printf ("Release FSM pointer ...\n");
+        free(vcb->free_space_map);
+        vcb->free_space_map = NULL;
+    }
 }
 
+// Releases memory allocated in allocateBlocks, resets its size
 void releaseReqBlocks(extents_st reqBlocks) {
-    free(reqBlocks.extents);
-    reqBlocks.extents = NULL;
-    reqBlocks.size = 0;
+    if (reqBlocks.extents) {
+        printf ("Release blocks extents ...\n");
+        free(reqBlocks.extents);
+        reqBlocks.extents = NULL;
+    } reqBlocks.size = 0;
 }
 
+// Adds a new extent to the fs map, specifying starting location and block count.
 void addExtent(int startLoc, int countBlock) {
     vcb->free_space_map[vcb->fs_st.extentLength].startLoc = startLoc;
     vcb->free_space_map[vcb->fs_st.extentLength].countBlock = countBlock;
     vcb->fs_st.extentLength++;
+    vcb->fs_st.lastExtentSize = countBlock;
 }
 
-// Remove an extent_st structure from the FreeSpace based on its location
+// Remove an extent_st from the FreeSpace based on its location
 void removeExtent( int startLoc ) {
     for (int i = 0; i < vcb->fs_st.extentLength; i++) {
         if (vcb->free_space_map[i].startLoc == startLoc) {
-            // shift remaining extents to the left
+            // Shift remaining extents to the left
             for (int j = i; j < vcb->fs_st.extentLength - 1; j++) {
                 vcb->free_space_map[j] = vcb->free_space_map[j + 1];
             }
@@ -231,7 +247,8 @@ void removeExtent( int startLoc ) {
 
 
 /** Reserve the minimum number of blocks required for free space.
- * @return 1 is minimum or number of blocks needed */
+ * @return 1 is minimum or number of blocks needed 
+ */
 int calBlocksNeededFS(int blocks, int blockSize, double fragmentPerc) {
     // Estimate the number of extents based on fragmentation percentage
     int estExtents = (int)(blocks * fragmentPerc);

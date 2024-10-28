@@ -18,7 +18,8 @@
 /** Computes the number of blocks needed to store a given amount of data.
  * @param m The size of the data in bytes.
  * @param n The size of a single block in bytes.
- * @return The number of blocks needed */
+ * @return The number of blocks needed 
+ */
 int computeBlockNeeded(int m, int n) {
     return (m + (n - 1)) /n;
 }

@@ -28,45 +28,52 @@
 #include "structs/fs_utils.h"
 
 #define PRIMARY_EXTENT_TB vcb->block_size/sizeof(extent_st)
+
 #define TERTIARY_EXTENT_TB ( PRIMARY_EXTENT_TB * 2 )
+#define TERTIARY_EXT_COUNT -3
+
 #define FRAGMENTATION_PERCENT 0.05 //Number of Blocks need for FreeSpace
 #define FREESPACE_START_LOC 1
 
+
 typedef struct freespace_st {
-    unsigned int freeSpaceLoc;    // start location of the free space block on disk.
-    unsigned int extentLength;    // number of extents currently in free space map
     unsigned int totalBlocksFree; // total blocks are free on disk
     unsigned int reservedBlocks;  // total number of blocks reserved for extents
-    unsigned int maxExtent;       // max extent can store on reserved blocks
+
+    unsigned int extentLength;    // primary extent cursor in free space map
+    unsigned int curExtentPage;   // current start index of extent table's opening in FS map
+    unsigned int maxExtent;       // maximum extents can be store on current extent tables
     
-    /** Last size element in the extent indicates the creation status of secondary 
-     * or tertiary extents
-     > 0  - indicates presence in the primary extent
-     -2   - indicates a secondary extent has been created
-     -3   - indicates a tertiary extent has been created */ 
-    unsigned int lastExtentSize;
+    unsigned int tertiaryExtLength; // tertiary extent length
+    int terExtTBLoc;                // tertiary extent start loc
+
+    int* tertiaryExtentTB;      // Retain tertiary Extent TB in memory;
 } freespace_st;
 
 
+extent_st* initFreeSpace(int numberOfBlocks, int blockSize); 
 
-int initFreeSpace(int numberOfBlocks, int blockSize); 
+extent_st* loadFreeSpaceMap(int startLoc);
 
-int loadFSMap();
-void releaseFSMap();
-
-int calBlocksNeededFS(int numberOfBlocks, int blockSize, double fragmentPerc);
-void addExtent(int startLoc, int countBlock);
+int calBlocksNeededFS(int numberOfBlocks, int blockSize);
+int addExtent(int startLoc, int countBlock);
 void removeExtent( int startLoc );
 
-void releaseReqBlocks(extents_st reqBlocks);
 // int findLBABlockLocation(int n, int nBlock);
-// int createSecondaryExtent();
-// int createTertiaryExtent();
 
+int getSecTBLocation(int secIdx);
+int createSecondaryExtentTB(int startLoc, int countBlock);
+
+extent_st createTertiaryExtentTB();
+int createExtentTables();
 
 extents_st allocateBlocks(int nBlocks, int minContinuous);
 int releaseBlocks(int startLoc, int nBlocks);
 
 
+int innerExtentLength();
+void releaseExtents(extents_st reqBlocks);
+void* allocateMemFS(int nBlocks);
+void freePtr(void* ptr, char* type);
 
 #endif

@@ -31,16 +31,17 @@ typedef struct volume_control_block {
     unsigned int total_blocks;  // total number of blocks in the LBA
     unsigned int block_size;    // size of one block in bytes
     unsigned int root_loc;      // location of block containing the directory
-    
+    unsigned int free_space_loc;// start location of the free space block on disk
+
     freespace_st fs_st;         // fs structure store fields to manage freespace
 
     // Pointers for Runtime-only (NOT WRITTEN TO DISK)
-    extent_st *free_space_map;     // pointer to free space map
-    directory_entry *root_dir_ptr; // pointer to the root directory
+    extent_st* free_space_map;     // pointer to free space map
+    directory_entry* root_dir_ptr; // pointer to the root directory
 
 } volume_control_block;
 
-extern volume_control_block *vcb; // Global declaration of the volume control block
+extern volume_control_block* vcb; // Global declaration of the volume control block
 #endif
 
 

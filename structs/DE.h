@@ -24,9 +24,10 @@
 #include "structs/FreeSpace.h"
 #include "structs/Extent.h"
 #include "structs/fs_utils.h"
-  
+
 #define MAX_FILENAME 32
 #define UNUSED_ENTRY '\0' // Marker for unused entries
+#define DIRECTORY_ENTRIES 50
 
 typedef struct {
     time_t creation_time;               // creation time of the file or directory
@@ -42,8 +43,8 @@ typedef struct {
     
 } directory_entry;
 
-directory_entry *createDirectory(int numEntries, directory_entry *parent);
+directory_entry* createDirectory(int numEntries, directory_entry *parent);
 
 int writeDirHelper(directory_entry *newDir);
-
+directory_entry* loadDirectoryEntry();
 #endif

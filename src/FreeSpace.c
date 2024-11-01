@@ -27,6 +27,7 @@
  */
 extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
     vcb->free_space_loc = FREESPACE_START_LOC;
+    vcb->fs_st.curExtentLBA = FREESPACE_START_LOC;
 
     vcb->fs_st.reservedBlocks = calBlocksNeededFS( numberOfBlocks, blockSize );
     vcb->fs_st.maxExtent = vcb->fs_st.reservedBlocks * PRIMARY_EXTENT_TB;
@@ -39,17 +40,19 @@ extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
     // Init primary extent map for fspace
     extent_st* extentTable = (extent_st*) allocateMemFS(vcb->fs_st.reservedBlocks);
     
-    extent_st firstExt = { startFreeBlockLoc, vcb->fs_st.totalBlocksFree };
-    extentTable[0] = firstExt;
-
+    extentTable[0] = (extent_st) { startFreeBlockLoc, vcb->fs_st.totalBlocksFree };
     vcb->fs_st.extentLength++;
-    vcb->fs_st.curExtentPage = -1;
 
-    vcb->fs_st.tertiaryExtLength = 0;
-    vcb->fs_st.terExtTBLoc = -1;
 
-    // Write an extent structure to disk, return -1 if failure
-	if (LBAwrite((char*) &firstExt, 1, FREESPACE_START_LOC) != 1) return NULL; 
+    vcb->fs_st.terExtLength = 0; 
+    vcb->fs_st.terExtTBLoc = -1; // Indicate tertiary table is not exist
+
+    // printf("\n -- Total Blocks Free: %d - Extent Length: %d - [%d : %d] =============\n", 
+	// 			vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength, extentTable[0].startLoc, extentTable[0].countBlock);
+    // // Write an extent structure to disk, return -1 if failure
+    
+    // extentTable[0] = firstExt;
+	// if (LBAwrite((char*) &firstExt, 1, FREESPACE_START_LOC) != 1) return NULL; 
     return extentTable;
 }
 
@@ -58,27 +61,26 @@ extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
  * @return extent_st* on success or NULL on error
  */
 extent_st* loadFreeSpaceMap(int startLoc) {
-    printf("BEFORE******* curExtentPage: %d, tertiaryExtLength: %d, terExtTBLoc: %d \n", \
-        vcb->fs_st.curExtentPage, vcb->fs_st.tertiaryExtLength, vcb->fs_st.terExtTBLoc); 
+    printf("BEFORE ******* curExtentLBA: %d, terExtLength: %d, terExtTBLoc: %d startLocation: %d ******** \n", \
+        vcb->fs_st.curExtentLBA, vcb->fs_st.terExtLength, vcb->fs_st.terExtTBLoc, startLoc); 
+    // Prevent multiple reads of the same free space map from disk
+    if (vcb->free_space_map && startLoc == vcb->fs_st.curExtentLBA) return vcb->free_space_map;
     
-    if (vcb->free_space_map && startLoc == vcb->fs_st.curExtentPage) {
-        return vcb->free_space_map;
-    }
     // Allocate memory for the free space map
     extent_st* extentTable = (extent_st*) allocateMemFS(vcb->fs_st.reservedBlocks);
 
     // Read blocks into memory; release FS Map on failure
     int readStatus = LBAread(extentTable, vcb->fs_st.reservedBlocks, startLoc);
     if (readStatus < vcb->fs_st.reservedBlocks) {
-        freePtr(extentTable, "extentTable\n");
+        freePtr(extentTable, "extentTable");
         return NULL;
     }
 
-    // Set current opend FreeMap in memory:
-    vcb->fs_st.curExtentPage = startLoc;
+    // Set current opend FreeMap in memory based on its start location LBA location
+    vcb->fs_st.curExtentLBA = startLoc; 
     
-    printf("AFTER******* curExtentPage: %d, tertiaryExtLength: %d, terExtTBLoc: %d \n", \
-        vcb->fs_st.curExtentPage, vcb->fs_st.tertiaryExtLength, vcb->fs_st.terExtTBLoc); 
+    printf("AFTER******* curExtentLBA: %d, terExtLength: %d, terExtTBLoc: %d startLocation: %d ------------ \n", \
+        vcb->fs_st.curExtentLBA, vcb->fs_st.terExtLength, vcb->fs_st.terExtTBLoc, startLoc); 
     
     return extentTable;
 }
@@ -98,10 +100,10 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
         return requestBlocks;
     }
 
-    // Estimate number of extents will allocate in memory based on number of block request
+    // Estimate number of extents will allocate in memory
     int estExtents = (nBlocks < vcb->fs_st.extentLength) ? nBlocks : vcb->fs_st.extentLength;
 
-    // Allocate space for the returned extents (512 * 16)
+    // Allocate memory based on number of extents
     requestBlocks.extents = malloc(sizeof(extent_st) * estExtents);
     if (requestBlocks.extents == NULL) return requestBlocks;
     
@@ -110,14 +112,25 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     // Iterate over free space map extents to allocate blocks
     for (int i = 0; i < vcb->fs_st.extentLength && numBlockReq > 0; i++) {
         
-        printf("****** extentLength: %d | numBlockReq: %d | i: %d \
-                    *********\n", vcb->fs_st.extentLength, numBlockReq, i);
-        
+        int index = i % vcb->fs_st.maxExtent;
+        int indexTable = i / vcb->fs_st.maxExtent - 1;
 
-        int startLocation = vcb->free_space_map[i].startLoc;
-        int availableBlocks = vcb->free_space_map[i].countBlock; 
-            
-        if (availableBlocks < minContinuous) continue;
+        // Load a secondary table when needed.
+        if (index == 0 && indexTable > -1) {
+            printf("****** XXXXXXXXXXXXXXX *********\n");
+            // Write FSM to disk before load secondary extent tb
+            writeFSToDisk(vcb->fs_st.curExtentLBA); 
+
+            int secTBLoc = getSecTBLocation(indexTable);
+            vcb->free_space_map = loadFreeSpaceMap(secTBLoc);
+        }
+
+        int startLocation = vcb->free_space_map[index].startLoc;
+        int availableBlocks = vcb->free_space_map[index].countBlock; 
+        
+        printf("****** extentLength: %d | numBlockReq: %d | i: %d | startLocation:%d | availableBlocks:%d *********\n", vcb->fs_st.extentLength, numBlockReq, i, startLocation, availableBlocks);
+
+        if (availableBlocks < minContinuous || startLocation == -1) continue;
 
         // if number of blocks request less than or equal count, insert the pos & count
         // to extent list, and then remove this extent in primary table.
@@ -129,37 +142,29 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             // Adjust the total free blocks of freespace map
             vcb->fs_st.totalBlocksFree -= availableBlocks;
             
-            // Remove this extent from table and adjust loop index
-            removeExtent(startLocation); i--;
+            // Remove this extent from table
+            removeExtent(startLocation, index);
             numBlockReq -= availableBlocks;  // Reduce number of blocks requested
 
         } else {
             // Add a new extent with location and count
             requestBlocks.extents[requestBlocks.size++] = (extent_st)\
-                                {vcb->free_space_map[i].startLoc, numBlockReq};
+                                {vcb->free_space_map[index].startLoc, numBlockReq};
            
             // Update the extent in free space map to reduce its count
-            vcb->free_space_map[i].startLoc += numBlockReq;
-            vcb->free_space_map[i].countBlock -= numBlockReq;
+            vcb->free_space_map[index].startLoc += numBlockReq;
+            vcb->free_space_map[index].countBlock -= numBlockReq;
             vcb->fs_st.totalBlocksFree -= numBlockReq;
             
             numBlockReq = 0; // All required blocks have been assigned
         }
     }
-    
+  
     // If unable to fulfill request due to fragmentation, release allocated blocks
     int reqBlockStatus = (numBlockReq > 0) ? -1 : 0; 
     
-    // Write updated free space map and VCB to disk; handle write failure
-    int writeFSMStatus = ( LBAwrite(vcb->free_space_map, \
-            vcb->fs_st.reservedBlocks, 1) < vcb->fs_st.reservedBlocks) ? -1 : 0;
-    
-    int writeVCBStatus = ( LBAwrite(vcb, 1, 0) < 1 ) ? -1 : 0;
-
-
-    printf("******ALLOCATE: numBlockReq: %d | writeFSMStatus: %d | writeVCBStatus: %d *********\n", \
-                        numBlockReq, writeFSMStatus, writeVCBStatus);
-    if (reqBlockStatus == -1 || writeFSMStatus == -1 || writeVCBStatus == -1){
+    if (reqBlockStatus == -1){
+        printf("--------- ERROR - Unable to allocate blocks ---------\n");
         releaseExtents(requestBlocks);
         return requestBlocks;
     }
@@ -167,8 +172,10 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     // Reduce the size of memory before return
     requestBlocks.extents = realloc(requestBlocks.extents, requestBlocks.size * sizeof(extent_st) );
     if (requestBlocks.extents == NULL) {
-        printf("--------- Fail to realloc memory --------- \n");
+        printf("--------- ERROR - Unable to reallocate memory --------- \n");
     }
+    // // Write updated free space map and VCB to disk; printf write failure
+    // writeFSToDisk(vcb->fs_st.curExtentLBA);
     return requestBlocks;
 }
 
@@ -177,237 +184,213 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
  * NOTE: check for overlapping extents (processing... )
  * @return -1 if fail or 0 is sucessed 
  */
-int releaseBlocks(int startLoc, int nBlocks) {
+int releaseBlocks(int startLoc, int countBlocks) {
     // If the specified range exceeds total blocks, return -1 if error
-	int mergeLoc = startLoc + nBlocks;
+	int mergeLoc = startLoc + countBlocks;
 
     if (mergeLoc > vcb->total_blocks) return -1;
     
     int isNotFound = -1;
 
     // Iterate through the free space map to find a matching extent for merging
-    // for (size_t i = 0; i < vcb->fs_st.extentLength; i++) {
+    for (int i = 0; i < vcb->fs_st.extentLength; i++) {
         
-    //     // Merge if matching extent is found, update location and block count.
-    //     if ( mergeLoc == vcb->free_space_map[i].startLoc ) {
-    //         printf("==== Merge ========= OK ======\n");
-    //         vcb->free_space_map[i].startLoc -= nBlocks;
-    //         vcb->free_space_map[i].countBlock += nBlocks;
-    //         isNotFound = 0; break;
-    //     }
-    // }
+        int index = i % vcb->fs_st.maxExtent;
+        int indexTable = i / vcb->fs_st.maxExtent - 1;
+    
+        // Load a secondary table when needed.
+        if (index == 0 && indexTable > -1) {
+            writeFSToDisk(vcb->fs_st.curExtentLBA);            
+
+            int secTBLoc = getSecTBLocation(indexTable);
+            vcb->free_space_map = loadFreeSpaceMap(secTBLoc);
+        }
+
+        // // Merge if matching extent is found, update location and block count.
+        // if ( mergeLoc == vcb->free_space_map[index].startLoc ) {
+        //     printf("==== Merge ========= OK ======\n");
+        //     vcb->free_space_map[index].startLoc -= countBlocks;
+        //     vcb->free_space_map[index].countBlock += countBlocks;
+        //     isNotFound = 0;
+        //     break;
+        // }
+        
+        // If there is a spot available [-1: 0], replace its with an extent
+        if (vcb->free_space_map[index].startLoc == -1) {
+            vcb->free_space_map[index].startLoc = startLoc;
+            vcb->free_space_map[index].countBlock = countBlocks;
+            break;
+        }
+    }
 
     // Add a new extent to FS map if no matching merge location is found
-    if ( isNotFound ) addExtent(startLoc, nBlocks);
+    if ( isNotFound ) addExtent(startLoc, countBlocks);
+    vcb->fs_st.totalBlocksFree += countBlocks; // Update total free blocks
 
-    vcb->fs_st.totalBlocksFree += nBlocks; // Update total free blocks
-
-
-    // Write updated FS map and VCB to disk, return -1 if writing fails.
-    ////////////////////////////////////////////////////////////////////
-    if (LBAwrite(vcb->free_space_map, vcb->fs_st.reservedBlocks, \
-            vcb->fs_st.curExtentPage) < vcb->fs_st.reservedBlocks) return -1;
-    
-    //////////////////// CONSIDER WRITE ON CLOSE /////////////////////////////////
-    if (LBAwrite(vcb, 1, 0) < 1) return -1;
-    printf("====RELEASED===== [%d: %d] =====OK======\n", startLoc, nBlocks);
+    // Write updated free space map and VCB to disk; printf write failure
+    writeFSToDisk(vcb->fs_st.curExtentLBA);
+    printf("====RELEASED [%d: %d] - Status: OK======\n", startLoc, countBlocks);
     return 0;
 }
 
 // Adds a new extent to the fs map, specifying starting location and block count.
 int addExtent(int startLoc, int countBlock) {
-
+    int index = indexExtentTB();
     // If only Primary table exist
     if (vcb->fs_st.extentLength < vcb->fs_st.maxExtent) {
         vcb->free_space_map[vcb->fs_st.extentLength].startLoc = startLoc;
         vcb->free_space_map[vcb->fs_st.extentLength].countBlock = countBlock;
         vcb->fs_st.extentLength++;
-
         return 0;
     }
 
-    /** Handle cases when we need secondary extent table */
-    int innerLength = innerExtentLength(); //2024 % 1024 == 0
-
-    int secondExtTBInx = (vcb->fs_st.extentLength / vcb->fs_st.maxExtent) - 1; // 1024 / 1024 - 1 = 0
-
-    int isPrimaryFull = (vcb->fs_st.extentLength == vcb->fs_st.maxExtent) ? 0 : -1;
-    int isSecondFull = ( innerLength == 0 ) ? 0 : -1; // 2024 % 1024 == 0
-
-    if ( (isPrimaryFull == 0) || (isSecondFull == 0) ) {
+    printf("^^^^^^^^^^ index: %d, vcb->fs_st.extentLength: %d, {%d:%d} ^^^^^^^^^^\n", index, vcb->fs_st.extentLength, startLoc, countBlock);
+    // Handle cases when we need secondary extent table 1024 % 1024 == 0
+    if ( index == 0 ) {
         /** Create new secondary Extent TB */
-        printf("/** Create new secondary Extent TB */\n");
         int status = createSecondaryExtentTB(startLoc, countBlock);
-        if (status == -1) return -1;
-        printf("/** Create new secondary Extent TB SUCCESS!!! */\n");
+        if (status == -1) { 
+            printf("/** Create new secondary Extent TB */\n");
+            return -1;
+        }
     }
 
-    /** Open secondary extent table to add extent:
-     * - get 2nd ext table base on the index (secExTBInx)
-     * - Load 2nd ext table to memory base on its location loadFreeSpaceMap(###)
-     * - Set extent, increse extentLength.
+    /** 
+     * Open the secondary extent table to add an extent:
+     * - Retrieve the secondary extent table using the index.
+     * - Load the secondary extent table into memory based on its location 
+     * - Set the extent and increase the extent length.
      */
-
-    int secondaryTBLoc = getSecTBLocation(secondExtTBInx);
+    int statusSec = secondaryTBIndex();
+    if (statusSec == -1 ) return -1;
+    int secondaryTBLoc = getSecTBLocation( statusSec );
     
     vcb->free_space_map = loadFreeSpaceMap(secondaryTBLoc);
 
-    vcb->free_space_map[innerLength].startLoc = startLoc;
-    vcb->free_space_map[innerLength].countBlock = countBlock;
+    vcb->free_space_map[index].startLoc = startLoc;
+    vcb->free_space_map[index].countBlock = countBlock;
     vcb->fs_st.extentLength++;
     
     return 0;
     
 }
+/** Create tertiary extent table return its status */
+int createTertiaryExtentTB(){
+    /** Check if third extent exists; 
+     *   - Allocate 1 block on disk for tertiary table
+     *   - Retrieve location for third extent
+     *   - // Skipped - Add [3rd Loc: -3] to primary extent. */
 
-// Create Tertiary Extent and return its location
-int createSecondaryExtentTB(int start, int count) {
-    /* Create a tersary table:
-    Check if 3rd exist:
-        If not:
-            - Allocate 1 block on disk for the tertiary table
-            - Get the location and add [3rd Loc: -3] to the primary extent
-            - Allocate another 16 contiguous blocks for the tertiary table
-            - Get the location of the secondary extent table
-            - Add the 2nd extent table location to the 3rd extent and increase its size
-            - Write the 3rd extent to disk (close memory)
-            - Load the 2nd extent table into the FS map pointer
-            - Add the last extent in Primary to the 2nd table and increase extent len size
-            - Reset helper extent to { -1, 0 } Not use it anymore
-            - Add new start and count to the 2nd table and increase extent len size
-    */
-    // This case when tertiary table is not exist.
-    extent_st lastPriExt = {-1, 0};
-    if (vcb->fs_st.terExtTBLoc == -1) {
-        printf(" ----------- createTertiaryExtentTB ----------- \n");
-        lastPriExt = createTertiaryExtentTB();
-        if ( lastPriExt.startLoc == -1 ) return -1;
+    if ( vcb->fs_st.terExtTBLoc == -1 ) {
+        printf("Created Tertiary extent table!\n");
+        vcb->fs_st.terExtTBLoc = createExtentTables(1,0);
+
+        if ( vcb->fs_st.terExtTBLoc == -1 ) return -1;
+        printf("Created Tertiary extent table. Success!!!!!!!!! \n");
     }
 
-    int secondExtLoc = createExtentTables();
-    if (secondExtLoc == -1) {
+    return loadTertiaryTB();
+}
+
+/** Check if TertiaryTB exist in memory, if not load to memory */
+int loadTertiaryTB() {
+    if (!vcb->fs_st.terExtTBMap) {
+        vcb->fs_st.terExtTBMap = (int*) allocateMemFS(1);
+
+        int readStatus = LBAread(vcb->fs_st.terExtTBMap, 1, vcb->fs_st.terExtTBLoc);
+        if (readStatus < 1) return -1;
+
+        printf("LOADED 3rd not into memory\n");
+    } 
+    return 0;
+}
+
+// Create Secondary Extent and return its status
+int createSecondaryExtentTB() {
+    /** Create a secondary extent table:
+     *   - Allocate 16 contiguou blocks for secondary table.
+     *   - Get the location of the secondary extent table.
+     *   - Update third extent with location of secondary extent table and increase its size.
+     *   - Write the third extent to disk (finalize memory changes).
+     *   - Load secondary extent table into filesystem map pointer.
+     *   - // Skipped - Update last extent in primary extent to link to the secondary table and increase its length.
+     *   - Add the new start and count to the secondary table and increase its extent length.
+     */
+    /* If 3rd TB not exist, create it */
+    int status = createTertiaryExtentTB();
+    if (status == -1) return -1;
+
+    int secondTBLoc = createExtentTables(vcb->fs_st.reservedBlocks, vcb->fs_st.reservedBlocks);
+    if (secondTBLoc == -1) {
         printf("Error - Can not create secondary extent table\n");
         return -1;
     }
-    printf(" ----------- createExtentTables ----------- \n");
-    if (!vcb->fs_st.tertiaryExtentTB) {
-        vcb->fs_st.tertiaryExtentTB = malloc(vcb->block_size);
-    }
-    vcb->fs_st.tertiaryExtentTB[vcb->fs_st.tertiaryExtLength++] = secondExtLoc;
-    
-    int writeStatus = LBAwrite(vcb->fs_st.tertiaryExtentTB, 1, vcb->fs_st.terExtTBLoc);
+    vcb->fs_st.terExtTBMap[vcb->fs_st.terExtLength++] = secondTBLoc;
+    int writeStatus = LBAwrite(vcb->fs_st.terExtTBMap, 1, vcb->fs_st.terExtTBLoc);
     if (writeStatus == -1) return -1;
 
-    int innerLength = innerExtentLength();
-    
-    vcb->free_space_map = loadFreeSpaceMap(secondExtLoc);
-    if (vcb->free_space_map == NULL) {
-        printf("---- Fail to load FreeSpace Map memory: createSecondaryExtentTB() ----\n");
-        return -1;
-    }
-
-    if (lastPriExt.startLoc != -1) {
-        // Add the last extent in Primary to the 2nd table and increase its size
-        printf(" ----------- Add the last extent in Primary to the 2nd table and increase its size ----------- \n");
-        vcb->free_space_map[innerLength].startLoc = lastPriExt.startLoc;
-        vcb->free_space_map[innerLength].countBlock = lastPriExt.countBlock;
-        vcb->fs_st.extentLength++;
-    }
-
-    vcb->free_space_map[innerLength].startLoc = start;
-    vcb->free_space_map[innerLength].countBlock = count;
-    vcb->fs_st.extentLength++;
-    // NOTE: Shall I load the pimary extent table after finish???????
-
-    printf(" ----------- createSecondaryExtentTB SECCESS :) ----------- \n");
+    printf("Created secondary extent table - SUCCESS!!!\n");
     return 0;
 }
 
-/** Create a tertairy extent table when needed.
- * @return {-1, 0} extent on error or last extent from primary extent table 
+/** Allocate blocks for Primary, Secondary or Tertiary Extent
+ * @return start location; -1 on error 
  */
-extent_st createTertiaryExtentTB() {
-    extent_st ext = { -1, 0 };
+int createExtentTables(int nBlocks, int nContiguous) {
+    extents_st aBlocks = allocateBlocks(nBlocks, nContiguous);
 
-    extents_st terLoc = allocateBlocks(1, 0);
-    if (terLoc.extents == NULL) {
-        printf("Error - Can not create tertiary extent\n");
-        return ext;
-    };
-
-    vcb->fs_st.terExtTBLoc = terLoc.extents[0].startLoc;
-    printf("=======createTertiaryExtentTB - 3rd ExtentLoc: [%d: %d] ======\n", \
-                                terLoc.extents[0].startLoc, terLoc.extents[0].countBlock);
-    releaseExtents(terLoc);
-
-    int preExtIndx = vcb->fs_st.extentLength - 1;
-
-    // Retrieve last extents in Primary Ext Table
-    ext = ( extent_st ) { vcb->free_space_map[preExtIndx].startLoc, \
-                        vcb->free_space_map[preExtIndx].countBlock };
-
-    printf("======= Last extents in Primary Ext TB [%d: %d] ======\n", \
-                        ext.startLoc, ext.countBlock);
-    
-    printf("======= Extent Length: [%d] ======\n", vcb->fs_st.extentLength);
-    vcb->free_space_map[preExtIndx].startLoc = vcb->fs_st.terExtTBLoc;
-    vcb->free_space_map[preExtIndx].countBlock = TERTIARY_EXT_COUNT;
-    
-    printf("======= Extent Length Updated: [%d] ======\n", vcb->fs_st.extentLength);
-    
-    return ext;
-}
-
-/** Allocate blocks for Primary or Secondary Extent and return its start
- * @return location; -1 on error */
-int createExtentTables() {
-    extents_st allocateExtBlocks = allocateBlocks(vcb->fs_st.reservedBlocks, \
-                                                            vcb->fs_st.reservedBlocks);
-
-    if (allocateExtBlocks.extents == NULL || allocateExtBlocks.size != 1) {
-        printf("======= Error: Unable to createExtentTables ======\n"); 
+    if ( aBlocks.extents == NULL) {
+        printf("Error - Unable to create new Extent Tables with %d blocks and %d blocks are \
+                                        contiguous\n", nBlocks, nContiguous);
         return -1;
     }
-    
-    int extLoc = allocateExtBlocks.extents[0].startLoc;
-    if (allocateExtBlocks.extents) releaseExtents(allocateExtBlocks);
+    int extLoc = aBlocks.extents[0].startLoc;
+    releaseExtents(aBlocks);
     return extLoc;
 }
 
 
-int getSecTBLocation(int secIdnx) {
-    if (!vcb->fs_st.tertiaryExtentTB) {
-        vcb->fs_st.tertiaryExtentTB = (int*) allocateMemFS(1);
-
-        int readStatus = LBAread(vcb->fs_st.tertiaryExtentTB, 1, vcb->fs_st.terExtTBLoc);
-        if (readStatus < 1) {
-            freePtr(vcb->fs_st.tertiaryExtentTB, "Tertiaty TB\n");
-            return -1;
-        }
-    }
-    
-
-    int secondaryTBLoc = vcb->fs_st.tertiaryExtentTB[secIdnx];
-    printf("****** getSecTBLocation [%d] - SUCCESS :) *******\n", secondaryTBLoc);
-    return secondaryTBLoc;
-}
-
-int innerExtentLength() {
+int indexExtentTB() { // 1023 % 1024
     return vcb->fs_st.extentLength % vcb->fs_st.maxExtent;
 }
+int secondaryTBIndex() { // 1024 / 1024 - 1 = 0
+    return vcb->fs_st.extentLength / vcb->fs_st.maxExtent - 1;
+}
 
-// Remove an extent_st from the FreeSpace based on its location
-void removeExtent( int startLoc ) {
-    for (int i = 0; i < vcb->fs_st.extentLength; i++) {
+/** Remove an extent_st from the FreeSpace based on its location
+ * Instead of remove an extent from the list by looping for all extents of the table,
+ * temporary set this extent as [-1 : 0] mark as reserve space in the table. */ 
+void removeExtent( int startLoc, int i ) {
+    vcb->free_space_map[i].startLoc = -1;
+    vcb->free_space_map[i].countBlock = 0;
 
-        if (vcb->free_space_map[i].startLoc == startLoc) {
-            // Shift remaining extents to the left
-            for (int j = i; j < vcb->fs_st.extentLength - 1; j++) {
-                vcb->free_space_map[j] = vcb->free_space_map[j + 1];
-            }
-            vcb->fs_st.extentLength-- ;
-        }
+    // for (int i = 0; i < vcb->fs_st.extentLength; i++) {
+    //     if (vcb->free_space_map[i].startLoc == startLoc) {
+    //         // Shift remaining extents to the left
+    //         for (int j = i; j < vcb->fs_st.extentLength - 1; j++) {
+    //             vcb->free_space_map[j] = vcb->free_space_map[j + 1];
+    //         }
+    //         vcb->fs_st.extentLength-- ;
+    //     }
+    // }
+}
+int getSecTBLocation(int secIdx) {
+    int status = loadTertiaryTB();
+    if (status != 0) {
+        printf("ERROR - getSecTBLocation @ %d\n", secIdx);
+        return -1;
     }
+    return vcb->fs_st.terExtTBMap[secIdx];
+}
+
+int writeFSToDisk(int startLoc) {
+    int wCount = LBAwrite (vcb->free_space_map, vcb->fs_st.reservedBlocks, startLoc);
+    if (wCount != vcb->fs_st.reservedBlocks) {
+        printf("ERROR - writeFSToDisk @ %d - wCount: %d - reservedBlocks: %d\n", startLoc, wCount, vcb->fs_st.reservedBlocks);
+        return -1;
+    }
+    printf("Saving Free Space map to disk @ %d ... \n", startLoc);   
+    return 0;
 }
 
 /** Reserve the minimum number of blocks required for free space.

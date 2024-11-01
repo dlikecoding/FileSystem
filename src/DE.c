@@ -41,7 +41,6 @@ directory_entry* createDirectory(int numEntries, directory_entry *parent) {
     extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
     if (blocksLoc.extents == NULL) {
         releaseExtents(blocksLoc);
-        freePtr(newDir, "DE");
         return NULL;
     }
 

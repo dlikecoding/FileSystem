@@ -71,7 +71,7 @@ vrun: $(ROOTNAME)$(HW)$(FOPTION)
 
 hex:
 	@clear
-	@Hexdump/hexdump.linux --start 18 --count 1 SampleVolume
+	@Hexdump/hexdump.linux --start 2 --count 1 SampleVolume
 
 asd: 
 	@clear

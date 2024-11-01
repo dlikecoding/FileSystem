@@ -41,37 +41,43 @@ typedef struct freespace_st {
     unsigned int reservedBlocks;  // total number of blocks reserved for extents
 
     unsigned int extentLength;    // primary extent cursor in free space map
-    unsigned int curExtentPage;   // current start index of extent table's opening in FS map
+    unsigned int curExtentLBA;    // current start block# of extent table's opening in FS map
     unsigned int maxExtent;       // maximum extents can be store on current extent tables
     
-    unsigned int tertiaryExtLength; // tertiary extent length
-    int terExtTBLoc;                // tertiary extent start loc
+    unsigned int terExtLength;    // tertiary extent length
+    int terExtTBLoc;              // tertiary extent start loc
 
-    int* tertiaryExtentTB;      // Retain tertiary Extent TB in memory;
+    int* terExtTBMap;      // Retain tertiary Extent TB in memory;
 } freespace_st;
 
 
 extent_st* initFreeSpace(int numberOfBlocks, int blockSize); 
-
 extent_st* loadFreeSpaceMap(int startLoc);
-
-int calBlocksNeededFS(int numberOfBlocks, int blockSize);
-int addExtent(int startLoc, int countBlock);
-void removeExtent( int startLoc );
-
-// int findLBABlockLocation(int n, int nBlock);
-
-int getSecTBLocation(int secIdx);
-int createSecondaryExtentTB(int startLoc, int countBlock);
-
-extent_st createTertiaryExtentTB();
-int createExtentTables();
 
 extents_st allocateBlocks(int nBlocks, int minContinuous);
 int releaseBlocks(int startLoc, int nBlocks);
 
 
-int innerExtentLength();
+int addExtent(int startLoc, int countBlock);
+void removeExtent( int startLoc, int i );
+
+// int findLBABlockLocation(int n, int nBlock);
+
+
+
+int createExtentTables(int nBlocks, int nContiguous);
+int createSecondaryExtentTB();
+int createTertiaryExtentTB();
+int loadTertiaryTB();
+
+int writeFSToDisk(int startLoc);
+
+int calBlocksNeededFS(int numberOfBlocks, int blockSize);
+int getSecTBLocation(int secIdx);
+
+int indexExtentTB();
+int secondaryTBIndex();
+
 void releaseExtents(extents_st reqBlocks);
 void* allocateMemFS(int nBlocks);
 void freePtr(void* ptr, char* type);

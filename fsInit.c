@@ -34,63 +34,49 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	printf ("Initializing File System with %ld blocks with a block size of %ld\n", numberOfBlocks, blockSize);
 	/* TODO: Add any code you need to initialize your file system. */
 	
-	//Allocate first block on the disk into memory which store vcb struct
+	// Allocate first block on the disk into memory which store vcb struct
 	vcb = malloc(blockSize);
 	if (vcb == NULL) return -1;
 
-	//Read first block on disk & return if error
+	// Read first block on disk & return if error
 	if (LBAread(vcb, 1, 0) < 1) return -1;
 
 	vcb->free_space_map = NULL; 
 	vcb->root_dir_ptr = NULL;
 	vcb->fs_st.terExtTBMap = NULL;
 
-	//File System is matched with current FS
+	// Signature is matched with current File System
 	if (vcb->signature == SIGNATURE) {
 		/* TODO: Load free_space_map and root_dir_ptr location HERE */
 		vcb->root_dir_ptr = loadDirectoryEntry();
 		vcb->free_space_map = loadFreeSpaceMap(FREESPACE_START_LOC);
 		
 		if (vcb->root_dir_ptr == NULL || vcb->free_space_map == NULL ) return -1;
-		// vcb->fs_st.terExtTBMap = NULL;
-
-		printf("============== root_loc: %d =============\n", vcb->root_loc);
-		printf("============== free_space_loc: %d =============\n", vcb->free_space_loc);
 		
-
-		// int i = 0;
-		// while (vcb->root_dir_ptr->file_size != 0) {
-		// 	printf("================%s=============", vcb->root_dir_ptr->file_name);
-		// 	vcb->root_dir_ptr++;
-		// }
-
 		/* TEST ALLOCATE */
-		// for (size_t i = 0; i < 1100 ; i++) {
-			// extents_st test = allocateBlocks(1, 0);
+		// for (size_t i = 0; i < 3000 ; i++) {
+		// 	extents_st test = allocateBlocks(1, 0);
 		// 	if (test.extents != NULL) {
 		// 		printf("============== [%d: %d] =============\n", test.extents[0].startLoc, test.extents[0].countBlock);
 		// 	}
 		// }
 
 		/* TEST RELEASE */
-		// for (size_t id = 30; id < 1100 ; id++) { //1024
-		// 	// if (id % 2 == 0) {
+		// for (size_t id = 30; id < 3030 ; id++) { //1024
+		// 	if (id % 2 == 0) {
 		// 		int test = releaseBlocks(id, 1);
 		// 		printf("============== currentA: %d (%ld, 1) =============\n", vcb->fs_st.curExtentLBA, id);
-		// 	// }	
+		// 	}	
 		// }
 		
-		// vcb->fs_st.terExtTBMap = (int*) allocateMemFS(1);
-
-        // int readStatus = LBAread(vcb->fs_st.terExtTBMap, 1, 1073);
 
 		// int secondTab = getSecTBLocation(0);
 		// printf( "secondTab: %d", secondTab);
 
-		vcb->free_space_map = loadFreeSpaceMap(2226);
-		for (size_t i = 0; i < 100 ; i++) { //vcb->fs_st.extentLength
-			printf("============== [ %d: %d ] =============\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
-		}
+		// vcb->free_space_map = loadFreeSpaceMap(secondTab);
+		// for (size_t i = 0; i < 10 ; i++) { //vcb->fs_st.extentLength
+		// 	printf("============== [ %d: %d ] =============\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
+		// }
 	
 		printf("\n -- Total Blocks Free: %d - Extent Length: %d - terExtTBLoc: %d =============\n", 
 				vcb->fs_st.totalBlocksFree, vcb->fs_st.extentLength, vcb->fs_st.terExtTBLoc);
@@ -110,13 +96,13 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 	vcb->free_space_map = initFreeSpace(numberOfBlocks, blockSize);
 	if (vcb->free_space_map == NULL) return -1;
 
-	// // Allocatte memory for root_dir_ptr	
+	// Initialize root directory ..	
 	vcb->root_dir_ptr = createDirectory(DIRECTORY_ENTRIES, NULL);
 	if (vcb->root_dir_ptr == NULL) return -1;
 
 	// DirectoryEntry location start after FreeSpace loc
 	vcb->root_loc = vcb->root_dir_ptr->block_location.startLoc;
-
+	
 	return 0;
 	}
 	
@@ -127,7 +113,7 @@ void exitFileSystem ()
 	if (LBAwrite(vcb, 1, 0) < 1){
 		printf("Unable to write VCB to system!\n"); //write unsuccessed
 	} 
-	// Write updated free space map and VCB to disk; printf write failure
+	// Write updated free space map and VCB to disk; print write failure
     writeFSToDisk(vcb->fs_st.curExtentLBA);
 
 	freePtr(vcb->fs_st.terExtTBMap, "Tetiary Table");

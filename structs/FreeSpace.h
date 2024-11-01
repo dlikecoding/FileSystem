@@ -78,6 +78,7 @@ int getSecTBLocation(int secIdx);
 int indexExtentTB();
 int secondaryTBIndex();
 
+void pageSwap(int idx, int idxPage);
 void releaseExtents(extents_st reqBlocks);
 void* allocateMemFS(int nBlocks);
 void freePtr(void* ptr, char* type);

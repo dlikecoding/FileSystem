@@ -23,3 +23,16 @@
 int computeBlockNeeded(int m, int n) {
     return (m + (n - 1)) /n;
 }
+
+int min(int a, int b) {
+    return (a) < (b) ? (a) : (b);
+} 
+
+// Frees memory allocated forfree space map and resets the pointer
+void freePtr(void* ptr, char* type){
+    if (ptr) {
+        printf ("Release %s pointer ...\n", type);
+        free(ptr);
+        ptr = NULL;
+    }
+}

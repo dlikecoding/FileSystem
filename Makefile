@@ -37,13 +37,13 @@
 ROOTNAME=fsshell
 HW=
 FOPTION=
-RUNOPTIONS=SampleVolume 10000000 512
+RUNOPTIONS=SampleVolume 10000000 512 --track-origins=yes
 CC=gcc
 CFLAGS= -g -I.
 LIBS =pthread
 DEPS = 
 # Add any additional objects to this list
-ADDOBJ= fsInit.o src/fs_utils.o src/FreeSpace.o src/DE.o
+ADDOBJ= fsInit.o src/fs_utils.o src/FreeSpace.o src/DE.o mfs.o
 ARCH = $(shell uname -m)
 
 ifeq ($(ARCH), aarch64)
@@ -71,7 +71,7 @@ vrun: $(ROOTNAME)$(HW)$(FOPTION)
 
 hex:
 	@clear
-	@Hexdump/hexdump.linux --start 2 --count 1 SampleVolume
+	@Hexdump/hexdump.linux --start 18 --count 8 SampleVolume
 
 asd: 
 	@clear

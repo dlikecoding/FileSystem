@@ -1,7 +1,7 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen
-* Student IDs:: 923091933
+* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 922810925, 918157791
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
 * Project:: Basic File System
@@ -15,36 +15,39 @@
 * data blocks on disk
 *
 **************************************************************/
-
-#ifndef _DE_H
-#define _DE_H
-
+#ifndef DE_H
+#define DE_H
 #include <time.h>
-
-#include "structs/FreeSpace.h"
-#include "structs/Extent.h"
-#include "structs/fs_utils.h"
+#include "Extent.h"
+#include "fs_utils.h"
+#include "FreeSpace.h"  // Add this to get access to releaseBlocks
 
 #define MAX_FILENAME 32
-#define UNUSED_ENTRY '\0' // Marker for unused entries
-#define DIRECTORY_ENTRIES 50
+#define UNUSED_ENTRY '\0'
+#define DIRECTORY_ENTRIES 50  
 
-typedef struct {
-    time_t creation_time;               // creation time of the file or directory
-    time_t modification_time;           // last modification time
-    time_t access_time;                 // last access time
+typedef struct directory_entry {
+    time_t creation_time;      // Creation time of the file or directory
+    time_t modification_time;  // Last modification time
+    time_t access_time;        // Last access time
     
-    int file_size;                      // size of the file or directory
-    int is_directory;                   // 1 if directory, 0 if file
-    int is_used;                        // 1 if used, 0 if unused
+    int file_size;             // Size of the file or directory in bytes
+    int is_directory;          // 1 if directory, 0 if file
+    int is_used;               // 1 if used, 0 if unused
     
-    char file_name[MAX_FILENAME];       // File or directory name
-    extent_st block_location; // An of extent for data blocks (Processing... )
+    char file_name[MAX_FILENAME]; // File or directory name
     
+    extent_st* data_blocks;     // An array of extents store location of DE
 } directory_entry;
 
-directory_entry* createDirectory(int numEntries, directory_entry *parent);
 
-int writeDirHelper(directory_entry *newDir);
-directory_entry* loadDirectoryEntry();
-#endif
+// Public interface
+directory_entry* createDirectory(int numEntries, directory_entry* parent);
+directory_entry* loadDirectoryEntry(int rootLoc);
+
+// Internal helper function declarations
+int writeDirHelper(directory_entry* newDir);
+// void releaseDirectory(directory_entry* dir);
+// void releaseBlocksAndCleanup(extents_st blocksLoc);
+
+#endif // DE_H

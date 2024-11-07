@@ -15,7 +15,6 @@
 * secondary and tertiary extents
 *
 **************************************************************/
-
 #include "structs/VCB.h"
 #include "structs/FreeSpace.h"
 
@@ -28,10 +27,12 @@
 extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
     vcb->free_space_loc = FREESPACE_START_LOC;
     vcb->fs_st.curExtentLBA = FREESPACE_START_LOC;
-    
-    // vcb->fs_st.extentLength = 0;
+  
     vcb->fs_st.reservedBlocks = calBlocksNeededFS( numberOfBlocks, blockSize );
     vcb->fs_st.maxExtent = vcb->fs_st.reservedBlocks * PRIMARY_EXTENT_TB;
+
+    // this is the index of the free space map
+    vcb->fs_st.extentLength = 0;
 
     // Calculate start location of free blocks on disk
     int startFreeBlockLoc = vcb->fs_st.reservedBlocks + vcb->free_space_loc;
@@ -44,7 +45,6 @@ extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
     extentTable[0] = (extent_st) { startFreeBlockLoc, vcb->fs_st.totalBlocksFree };
     vcb->fs_st.extentLength++;
 
-
     vcb->fs_st.terExtLength = 0; 
     vcb->fs_st.terExtTBLoc = -1; // Indicate tertiary table is not exist
 
@@ -56,8 +56,6 @@ extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
  * @return extent_st* on success or NULL on error
  */
 extent_st* loadFreeSpaceMap(int startLoc) {
-    printf("BEFORE ******* curExtentLBA: %d, terExtLength: %d, terExtTBLoc: %d startLocation: %d ******** \n", \
-        vcb->fs_st.curExtentLBA, vcb->fs_st.terExtLength, vcb->fs_st.terExtTBLoc, startLoc); 
     // Prevent multiple reads of the same free space map from disk
     if (vcb->free_space_map && startLoc == vcb->fs_st.curExtentLBA) return vcb->free_space_map;
     
@@ -73,10 +71,6 @@ extent_st* loadFreeSpaceMap(int startLoc) {
 
     // Set current opend FreeMap in memory based on its start location LBA location
     vcb->fs_st.curExtentLBA = startLoc; 
-    
-    printf("AFTER******* curExtentLBA: %d, terExtLength: %d, terExtTBLoc: %d startLocation: %d ------------ \n", \
-        vcb->fs_st.curExtentLBA, vcb->fs_st.terExtLength, vcb->fs_st.terExtTBLoc, startLoc); 
-    
     return extentTable;
 }
 
@@ -87,6 +81,7 @@ extent_st* loadFreeSpaceMap(int startLoc) {
  */
 extents_st allocateBlocks(int nBlocks, int minContinuous) { 
     extents_st requestBlocks = { NULL, 0 };
+    vcb->free_space_map = loadFreeSpaceMap(FREESPACE_START_LOC);
 
     // Check if request exceeds available blocks or does not meet minimum continuity
     int numBlockReq = (nBlocks > vcb->fs_st.totalBlocksFree) ? -1 : nBlocks;
@@ -96,7 +91,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     }
 
     // Estimate number of extents will allocate in memory
-    int estExtents = (nBlocks < vcb->fs_st.extentLength) ? nBlocks : vcb->fs_st.extentLength;
+    int estExtents = min(nBlocks, vcb->fs_st.extentLength);
 
     // Allocate memory based on number of extents
     requestBlocks.extents = malloc(sizeof(extent_st) * estExtents);
@@ -112,7 +107,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
         
         // Load a secondary table when needed.
         pageSwap(index, indexTable);
-
+        
         int startLocation = vcb->free_space_map[index].startLoc;
         int availableBlocks = vcb->free_space_map[index].countBlock; 
         
@@ -145,13 +140,13 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
             numBlockReq = 0; // All required blocks have been assigned
         }
     }
-  
+
     // If unable to fulfill request due to fragmentation, release allocated blocks
     int reqBlockStatus = (numBlockReq > 0) ? -1 : 0; 
     
     if (reqBlockStatus == -1){
         printf("--------- ERROR - Unable to allocate blocks ---------\n");
-        releaseExtents(requestBlocks);
+        releaseExtents(&requestBlocks);
         return requestBlocks;
     }
 
@@ -160,6 +155,8 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     if (requestBlocks.extents == NULL) {
         printf("--------- ERROR - Unable to reallocate memory --------- \n");
     }
+
+
     return requestBlocks;
 }
 
@@ -181,13 +178,14 @@ int releaseBlocks(int startLoc, int countBlocks) {
         
         int index = i % vcb->fs_st.maxExtent;
         int indexTable = i / vcb->fs_st.maxExtent - 1;
-
+        
+        int checkOverlap = isOverlap(vcb->free_space_map[index], startLoc, countBlocks); 
+        if (checkOverlap == -1) return -1;
         // Load a secondary table when needed.
         pageSwap(index, indexTable);
-
+        
         // Merge if matching extent is found, update location and block count.
         if ( mergeLoc == vcb->free_space_map[index].startLoc ) {
-            printf("==== Merge ========= OK ======\n");
             vcb->free_space_map[index].startLoc -= countBlocks;
             vcb->free_space_map[index].countBlock += countBlocks;
             isNotFound = 0;
@@ -206,7 +204,6 @@ int releaseBlocks(int startLoc, int countBlocks) {
     if ( isNotFound ) addExtent(startLoc, countBlocks);
     vcb->fs_st.totalBlocksFree += countBlocks; // Update total free blocks
 
-    // Write updated free space map and VCB to disk; printf write failure
     writeFSToDisk(vcb->fs_st.curExtentLBA);
     printf("====RELEASED [%d: %d] - Status: OK======\n", startLoc, countBlocks);
     return 0;
@@ -254,10 +251,12 @@ int addExtent(int startLoc, int countBlock) {
 }
 /** Create tertiary extent table return its status */
 int createTertiaryExtentTB(){
-    /** Check if third extent exists; 
+    /** Check if third extent is not exists; 
      *   - Allocate 1 block on disk for tertiary table
      *   - Retrieve location for third extent
-     *   - // Skipped - Add [3rd Loc: -3] to primary extent. 
+     *   - // Skipped - Add [3rd Loc: -3] to primary extent.
+     * else: tertiary table exist:
+     *   - Load tertiary table to memory
      */
     if ( vcb->fs_st.terExtTBLoc == -1 ) {
         printf("Created Tertiary extent table!\n");
@@ -277,9 +276,7 @@ int loadTertiaryTB() {
 
         int readStatus = LBAread(vcb->fs_st.terExtTBMap, 1, vcb->fs_st.terExtTBLoc);
         if (readStatus < 1) return -1;
-
-        printf("LOADED 3rd not into memory\n");
-    } 
+    } printf("LOADED Tertiary Ext Table to Memory\n");
     return 0;
 }
 
@@ -303,7 +300,11 @@ int createSecondaryExtentTB() {
         printf("Error - Can not create secondary extent table\n");
         return -1;
     }
+
+    // Add second extent table location to tertiary extent table map
     vcb->fs_st.terExtTBMap[vcb->fs_st.terExtLength++] = secondTBLoc;
+    
+    // Write updated Tertiary extent table to disk 
     int writeStatus = LBAwrite(vcb->fs_st.terExtTBMap, 1, vcb->fs_st.terExtTBLoc);
     if (writeStatus == -1) return -1;
 
@@ -317,21 +318,25 @@ int createSecondaryExtentTB() {
 int createExtentTables(int nBlocks, int nContiguous) {
     extents_st aBlocks = allocateBlocks(nBlocks, nContiguous);
 
-    if ( aBlocks.extents == NULL) {
+    if ( aBlocks.extents == NULL || aBlocks.size == 0) {
         printf("Error - Unable to create new Extent Tables with %d blocks and %d blocks are \
                                         contiguous\n", nBlocks, nContiguous);
         return -1;
     }
     int extLoc = aBlocks.extents[0].startLoc;
-    releaseExtents(aBlocks);
+    releaseExtents(&aBlocks);
     return extLoc;
 }
 
-
-int indexExtentTB() { // 1023 % 1024
+// @return the remainder of extentLength divided by maxExtent
+int indexExtentTB() { // Example: 1023 % 1024 -> 1023
     return vcb->fs_st.extentLength % vcb->fs_st.maxExtent;
 }
-int secondaryTBIndex() { // 1024 / 1024 - 1 = 0
+
+// @return index of the secondary table by dividing extentLength by maxExtent,
+// and subtracting 1 to get the secondary table index
+// Example: 1024 / 1024 - 1 -> 0 (This gives the index of the secondary table)
+int secondaryTBIndex() {
     return vcb->fs_st.extentLength / vcb->fs_st.maxExtent - 1;
 }
 
@@ -341,16 +346,6 @@ int secondaryTBIndex() { // 1024 / 1024 - 1 = 0
 void removeExtent( int startLoc, int i ) {
     vcb->free_space_map[i].startLoc = -1;
     vcb->free_space_map[i].countBlock = 0;
-
-    // for (int i = 0; i < vcb->fs_st.extentLength; i++) {
-    //     if (vcb->free_space_map[i].startLoc == startLoc) {
-    //         // Shift remaining extents to the left
-    //         for (int j = i; j < vcb->fs_st.extentLength - 1; j++) {
-    //             vcb->free_space_map[j] = vcb->free_space_map[j + 1];
-    //         }
-    //         vcb->fs_st.extentLength-- ;
-    //     }
-    // }
 }
 
 /** Check if current index is on the new extent table, change the table */
@@ -385,7 +380,7 @@ int writeFSToDisk(int startLoc) {
         printf("ERROR - writeFSToDisk @ %d - wCount: %d - reservedBlocks: %d\n", startLoc, wCount, vcb->fs_st.reservedBlocks);
         return -1;
     }
-    printf("Saving Free Space map to disk @ %d ... \n", startLoc);   
+    // printf("Saved Free Space Map to disk @ %d ... \n", startLoc);   
     return 0;
 }
 
@@ -411,20 +406,27 @@ void* allocateMemFS(int nBlocks) {
     } return ptr;
 }
 
+/** Check if the sub-range is outside the existing range
+ * @return 0 on success or -1 if is overlap
+*/
+int isOverlap(extent_st existExt, int addExtStart, int addExtCount) {
+    int end = existExt.startLoc + existExt.countBlock - 1;
+    int subEnd = addExtStart + addExtCount - 1;
+
+    if (subEnd < existExt.startLoc || addExtStart > end) {
+        return 0;  // Outside
+    }
+    printf("--- WARNING: Extent is overlap, check your system ---");
+    return -1;
+}
+
 /** Allocates memory for a specified number of blocks in the filesystem
  * @return a pointer to the allocated memory or NULL if allocation fails
  */
-void releaseExtents(extents_st reqBlocks) {
-    if (reqBlocks.extents) {
-        freePtr(reqBlocks.extents, "blocks allocate");
-    } reqBlocks.size = 0;
+void releaseExtents(extents_st *reqBlocks) {
+    if (!reqBlocks && !reqBlocks->extents) {
+        freePtr(&reqBlocks->extents, "blocks allocate");
+        reqBlocks->extents = NULL;
+    } reqBlocks->size = 0;
 }
 
-// Frees memory allocated forfree space map and resets the pointer
-void freePtr(void* ptr, char* type){
-    if (ptr) {
-        printf ("Release %s pointer ...\n", type);
-        free(ptr);
-        ptr = NULL;
-    }
-}

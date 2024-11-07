@@ -1,9 +1,9 @@
 /**************************************************************
-* Class::  CSC-415-0# Spring 2024
-* Name::
-* Student IDs::
-* GitHub-Name::
-* Group-Name::
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 922810925, 918157791
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
 * Project:: Basic File System
 *
 * File:: mfs.h
@@ -16,6 +16,8 @@
 **************************************************************/
 
 
+#include "structs/DE.h"
+
 #ifndef _MFS_H
 #define _MFS_H
 #include <sys/types.h>
@@ -25,6 +27,8 @@
 #include "b_io.h"
 
 #include <dirent.h>
+#include <sys/stat.h>
+
 #define FT_REGFILE	DT_REG
 #define FT_DIRECTORY DT_DIR
 #define FT_LINK	DT_LNK
@@ -35,6 +39,13 @@ typedef u_int64_t uint64_t;
 #ifndef uint32_t
 typedef u_int32_t uint32_t;
 #endif
+
+int ParsePath(const char *path, directory_entry **retParent, int *index, char **lastElement);
+int findInDir(directory_entry *parent, char *name);
+directory_entry* loadDir(directory_entry *directoryEntry);
+void freeDirectory(directory_entry *dir);
+
+// char* collapsePath(char *path);
 
 // This structure is returned by fs_readdir to provide the caller with information
 // about each file as it iterates through a directory
@@ -80,7 +91,7 @@ int fs_delete(char* filename);	//removes a file
 struct fs_stat
 	{
 	off_t     st_size;    		/* total size, in bytes */
-	blksize_t st_blksize; 		/* blocksize for file system I/O */
+	// blksize_t st_blksize; 		/* blocksize for file system I/O */
 	blkcnt_t  st_blocks;  		/* number of 512B blocks allocated */
 	time_t    st_accesstime;   	/* time of last access */
 	time_t    st_modtime;   	/* time of last modification */

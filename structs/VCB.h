@@ -39,6 +39,9 @@ typedef struct volume_control_block {
     extent_st* free_space_map;     // pointer to free space map
     directory_entry* root_dir_ptr; // pointer to the root directory
 
+    directory_entry* cwdPtr; // Pointer to the directory entry struct for the cwd
+    char* cwdStr;            // Pointer to the string representation of the cwd path
+    
 } volume_control_block;
 
 extern volume_control_block* vcb; // Global declaration of the volume control block

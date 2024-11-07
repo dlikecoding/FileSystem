@@ -19,7 +19,7 @@
 #ifndef _FREESPACE_H
 #define _FREESPACE_H
 
-#include <stdio.h>
+
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
 
@@ -78,9 +78,9 @@ int getSecTBLocation(int secIdx);
 int indexExtentTB();
 int secondaryTBIndex();
 
+int isOverlap(extent_st existExt, int addExtStart, int addExtCount);
 void pageSwap(int idx, int idxPage);
-void releaseExtents(extents_st reqBlocks);
+void releaseExtents(extents_st* reqBlocks);
 void* allocateMemFS(int nBlocks);
-void freePtr(void* ptr, char* type);
 
 #endif

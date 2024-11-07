@@ -16,6 +16,15 @@
 #ifndef _FS_UTILS_C
 #define _FS_UTILS_C
 
+#include <stdlib.h>
+#include <stdio.h>
+
 int computeBlockNeeded(int m, int n);
+int min(int a, int b);
+
+void freePtr(void* ptr, char* type);
+
+
 
 #endif
+

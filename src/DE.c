@@ -1,27 +1,7 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
-* Student IDs:: 923091933, 924254653, 922810925, 918157791
-* GitHub-Name:: dlikecoding
-* Group-Name:: 0xAACD
-* Project:: Basic File System
-*
-* File:: DE.c
-*
-* Description:: Directory Entry is a data structure that stores metadata for 
-* a file or directory in the filesystem. It includes information such as creation, 
-* modification, and access timestamps; file size; entry type (file or directory); 
-* usage status; file name; and an array of extents that specify the locations of 
-* data blocks on disk (For now, only an extent in a DE)
-*
-**************************************************************/
-#include "structs/DE.h"
-#include "structs/VCB.h"
-
-/**************************************************************
-* Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen
-* Student IDs:: 923091933
+* Name:: Danish Nguyen, Atharva Walawalkar, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 918157791
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
 * Project:: Basic File System
@@ -38,8 +18,6 @@
 
 #include "structs/DE.h"
 #include "structs/VCB.h"
-
-#define BLOCK_SIZE vcb->block_size
 
 /** Initializes a new directory structure in memory with a specified number of entries 
  * as a subdirectory of a given parent directory. It calculates required space, allocates 
@@ -51,36 +29,21 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
 
     // Calculate memory needed for dir entries based on count and block size
     int bytesNeeded = numEntries * sizeof(directory_entry);
-    int blocksNeeded = computeBlockNeeded(bytesNeeded, BLOCK_SIZE);
-    int actualBytes = blocksNeeded * BLOCK_SIZE;
+    int blocksNeeded = computeBlockNeeded(bytesNeeded, vcb->block_size);
+    int actualBytes = blocksNeeded * vcb->block_size;
     int actualEntries = actualBytes / sizeof(directory_entry);
 
-    printf("bytesNeeded: %d - blocksNeeded: %d - actualBytes: %d - actualEntries: %d - numEntries: %d \n", 
-            bytesNeeded, blocksNeeded, actualBytes, actualEntries, numEntries);
+    // Retrieve available blocks on disk from fs map for this directory entry
+    extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
+    if (blocksLoc.extents == NULL || blocksLoc.size > MAX_EXTENTS) {
+        releaseExtents(&blocksLoc);
+        return NULL;
+    }
+
     // Allocate memory for new directory entries
     directory_entry *newDir = (directory_entry *)malloc(actualBytes);
     if (newDir == NULL) return NULL;
 
-    // Retrieve available disk blocks from  fs map for allocating this directory.
-    extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
-    if (blocksLoc.extents == NULL) {
-        // releaseExtents(blocksLoc);
-        freePtr(newDir, "DE DE.c");
-        return NULL;
-    }
-
-    /* TODO: Update this to handle multiple extents if needed, as future 
-    versions may support arrays of extents. */ 
-    extent_st blockLocation = blocksLoc.extents[0];
-    int extsSize = blocksLoc.size * sizeof(extent_st);
-    
-    extent_st* dBlocks = malloc(extsSize);
-    memcpy(dBlocks, blocksLoc.extents, extsSize);
-    
-
-    printf(" ------------ extsSize: %d ------------ \n", extsSize);
-    // releaseExtents(blocksLoc);
-    
     // Initialize self and parent directory entries
     for (int i = 2; i < actualEntries; i++) {
         newDir[i].is_used = 0;
@@ -91,7 +54,14 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
 
     // Initialize root directory entry "."
     strcpy(newDir[0].file_name, ".");
-    newDir[0].data_blocks = dBlocks;
+    
+    /* TODO: Update this to handle multiple extents if needed, as future 
+    versions may support arrays of extents. */ 
+    memcpy(newDir[0].extents, blocksLoc.extents, blocksLoc.size * sizeof(extent_st));
+    newDir[0].ext_length = blocksLoc.size;
+
+    releaseExtents(&blocksLoc); // release memory extent when done
+
     newDir[0].file_size = actualEntries * sizeof(directory_entry);
     newDir[0].is_directory = 1;
     newDir[0].is_used = 1;
@@ -103,7 +73,10 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     if (parent == NULL) parent = newDir;
 
     strcpy(newDir[1].file_name, "..");
-    newDir[1].data_blocks = parent[0].data_blocks;
+
+    memcpy(newDir[1].extents, parent[0].extents, parent[0].ext_length * sizeof(extent_st));
+    newDir[1].ext_length = parent[0].ext_length;
+
     newDir[1].file_size = parent[0].file_size;
     newDir[1].is_directory = parent[0].is_directory;
     newDir[1].is_used = 1;
@@ -118,7 +91,6 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
         freePtr(newDir, "DE DE.c");
         return NULL;
     }
-
     return newDir;
 }
 
@@ -126,19 +98,63 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
  * @return 0 on success or -1 on failure
  */
 int writeDirHelper(directory_entry *newDir) {
-    int blocks = computeBlockNeeded(newDir[0].file_size, BLOCK_SIZE);
+    int blocks = computeBlockNeeded(newDir[0].file_size, vcb->block_size);
+    if (LBAwrite(newDir, blocks, newDir[0].extents[0].startLoc) < blocks) {
+        return -1;
+    }
 
-    if (LBAwrite(newDir, blocks, newDir[0].data_blocks.startLoc) < blocks) return -1;
-    return 0;
+    // create a buffer to fill all DEs on mem to disk
+    char* newDirBlod = (char*) newDir;
+
+    // Integrate through each extent in 'newDir' to full fill DEs
+    for (int i = 0; i < newDir->ext_length; i++) {
+        int startLoc = newDir[0].extents[i].startLoc;
+        int countBlock = newDir[0].extents[i].countBlock;
+
+        // write each extent block by block. Return -1 on failure
+        if (LBAwrite(newDirBlod, countBlock, startLoc) < countBlock) {
+            return -1;
+        }
+        // move cursor forward based on number of blocks written
+        newDirBlod += (countBlock * vcb->block_size);
+    } return 0;
 }
 
 /** Load root a directory to memory. 
  * @return 0 on success or -1 on failure
  */
-directory_entry* loadDirectoryEntry(int rootLoc) {
-    int blocks = computeBlockNeeded(DIRECTORY_ENTRIES * sizeof(directory_entry), \
-                                                                    vcb->block_size);
-    directory_entry* de = malloc(blocks * vcb->block_size);
-    if (LBAread(de, blocks, rootLoc) < 1) return NULL;
+directory_entry* readDirHelper(int deLoc) {
+    int blocks = computeBlockNeeded(DIRECTORY_ENTRIES * sizeof(directory_entry), vcb->block_size);
+    
+    // Allocate memory for the directory entries
+    directory_entry* de = (directory_entry*)malloc(blocks * vcb->block_size);
+    if (de == NULL) return NULL;
+
+    // Read the first time to retrive the DE structure
+    if (LBAread(de, blocks, deLoc) < blocks) {
+        freePtr(de, "DE DE.c");
+        return NULL;
+    }
+     
+    if (de->ext_length == 1) return de; // Successfully loaded all DEs into memory
+    
+    /** Couldn't load all DEs into memory due to discontiguity, meaning 
+    the extent length is greater than one. Filling the DE buffer by looping 
+    through the extents */ 
+
+    // create a buffer to fill all DEs on disk to mem
+    char* dePtr = (char*) de; 
+    
+    for (int i = 0; i < 10; i++) {
+        int startLoc = de->extents[i].startLoc;
+        int countBlock = de->extents[i].countBlock;
+
+        if (LBAread(dePtr, countBlock, startLoc) < countBlock) {
+            freePtr(de, "DE DE.c");
+            return NULL;
+        }
+        // move pointer to the next position in the buffer
+        dePtr += (countBlock * vcb->block_size);
+    }
     return de;
 }

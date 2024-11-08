@@ -43,18 +43,18 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     vcb->fs_st.terExtTBMap = NULL;
     
     // Initialize current working directory
-    vcb->cwdStr = "/";
-    vcb->cwdPtr = NULL;
+    vcb->cwdStrPath = "/";
+    vcb->cwdLoadDE = NULL;
 
     // Signature is matched with current File System
     if (vcb->signature == SIGNATURE) {
 		
         vcb->free_space_map = loadFreeSpaceMap(FREESPACE_START_LOC);
-        vcb->root_dir_ptr = loadDirectoryEntry(vcb->root_loc);
+        vcb->root_dir_ptr = readDirHelper(vcb->root_loc);
         
 		if (vcb->root_dir_ptr == NULL || vcb->free_space_map == NULL ) return -1;
 
-        printf("============== [ %d ] =============\n", vcb->root_dir_ptr->data_blocks.startLoc);
+        printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
         // for (size_t i = 0; i < 2 ; i++) {
 		// 	printf("============== [ %d, %d ] =============\n", 
         //     vcb->root_dir_ptr->data_blocks.extents[i].startLoc, 
@@ -116,11 +116,10 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     if (vcb->root_dir_ptr == NULL) return -1;
     
     // DirectoryEntry location start after FreeSpace loc
-    vcb->root_loc = vcb->root_dir_ptr->data_blocks.startLoc;
+    vcb->root_loc = vcb->root_dir_ptr->extents[0].startLoc;
 
     return 0;
 }
-	
 	
 void exitFileSystem ()
 {

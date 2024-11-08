@@ -1,7 +1,7 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
-* Student IDs:: 923091933, 924254653, 922810925, 918157791
+* Name:: Danish Nguyen, Atharva Walawalkar, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 918157791
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
 * Project:: Basic File System
@@ -23,31 +23,29 @@
 #include "FreeSpace.h"  // Add this to get access to releaseBlocks
 
 #define MAX_FILENAME 32
-#define UNUSED_ENTRY '\0'
-#define DIRECTORY_ENTRIES 50  
+#define MAX_EXTENTS 16    // Maximum number of extents
 
-typedef struct directory_entry {
-    time_t creation_time;      // Creation time of the file or directory
-    time_t modification_time;  // Last modification time
-    time_t access_time;        // Last access time
+#define UNUSED_ENTRY '\0' // Marker for unused entries
+#define DIRECTORY_ENTRIES 50
+//SIZE OF DE 40 + 32 + 128 = 200
+typedef struct {
+    time_t creation_time;         // creation time of the file or directory
+    time_t modification_time;     // last modification time
+    time_t access_time;           // last access time
     
-    int file_size;             // Size of the file or directory in bytes
-    int is_directory;          // 1 if directory, 0 if file
-    int is_used;               // 1 if used, 0 if unused
+    int file_size;                // size of the file or directory
+    int is_directory;             // 1 if directory, 0 if file
+    int is_used;                  // 1 if used, 0 if unused
     
+    int ext_length;               // number of extents
+
     char file_name[MAX_FILENAME]; // File or directory name
+    extent_st extents[MAX_EXTENTS]; // An of extent for data blocks (Processing... )
     
-    extent_st* data_blocks;     // An array of extents store location of DE
 } directory_entry;
 
+directory_entry* createDirectory(int numEntries, directory_entry *parent);
 
-// Public interface
-directory_entry* createDirectory(int numEntries, directory_entry* parent);
-directory_entry* loadDirectoryEntry(int rootLoc);
-
-// Internal helper function declarations
-int writeDirHelper(directory_entry* newDir);
-// void releaseDirectory(directory_entry* dir);
-// void releaseBlocksAndCleanup(extents_st blocksLoc);
-
-#endif // DE_H
+int writeDirHelper(directory_entry *newDir);
+directory_entry* readDirHelper(int dirLoc);
+#endif

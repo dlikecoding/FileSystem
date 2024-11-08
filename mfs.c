@@ -1,19 +1,19 @@
-// /**************************************************************
-// * Class::  CSC-415-03 FALL 2024
-// * Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
-// * Student IDs:: 923091933, 924254653, 922810925, 918157791
-// * GitHub-Name:: dlikecoding
-// * Group-Name:: 0xAACD
-// * Project:: Basic File System
-// *
-// * File:: mfs.h
-// *
-// * Description:: 
-// *	This is the file system interface.
-// *	This is the interface needed by the driver to interact with
-// *	your filesystem.
-// *
-// **************************************************************/
+/**************************************************************
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 922810925, 918157791
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
+* Project:: Basic File System
+*
+* File:: mfs.h
+*
+* Description:: 
+*	This is the file system interface.
+*	This is the interface needed by the driver to interact with
+*	your filesystem.
+*
+**************************************************************/
 
 #include "mfs.h"
 #include "structs/DE.h"
@@ -25,7 +25,7 @@ int ParsePath(const char *path, directory_entry **retParent, int *index, char **
     if (path == NULL || strlen(path) == 0) return -1; // Invalid path
 
     // Start from root or CWD based on absolute or relative path
-    directory_entry *start = (path[0] == '/') ? vcb->root_dir_ptr : vcb->cwdPtr;
+    directory_entry *start = (path[0] == '/') ? vcb->root_dir_ptr : vcb->cwdLoadDE;
     directory_entry *parent = start;
 
     char pathCopy[strlen(path)];
@@ -75,7 +75,7 @@ int ParsePath(const char *path, directory_entry **retParent, int *index, char **
 /** Get current working directory
  * @returns the current working directory as a string in pathname */
 char* fs_getcwd(char *pathname, size_t size) {
-    strncpy(pathname, vcb->cwdStr, size);  //copy CWD string with size limit
+    strncpy(pathname, vcb->cwdStrPath, size);  //copy CWD string with size limit
     // pathname[size - 1] = '\0';  // Not sure if we need null-termination
     return pathname;
 }
@@ -149,113 +149,113 @@ directory_entry* loadDir(directory_entry *dir) {
 
 // Frees a directory, but skips the global root or CWD
 void freeDirectory(directory_entry *dir) {
-    if (dir == NULL || dir == vcb->root_dir_ptr || dir == vcb->cwdPtr) return; // Don't free global directories
+    if (dir == NULL || dir == vcb->root_dir_ptr || dir == vcb->cwdLoadDE) return; // Don't free global directories
     freePtr(dir, "Directory Entry"); // Free the directory entry pointer
 }
 
-// // Sets the current working directory to the specified `path`.
-// int fs_setcwd(char *pathname) {
-//     if (pathname == NULL || strlen(pathname) == 0) return -1;
+// Sets the current working directory to the specified `path`.
+int fs_setcwd(char *pathname) {
+    if (pathname == NULL || strlen(pathname) == 0) return -1;
 
-//     char *pathCopy = strdup(pathname);   // Create a modifiable copy of path
-//     directory_entry *parent;
-//     int index = -1;
-//     char *lastElement = NULL;
+    char *pathCopy = strdup(pathname);   // Create a modifiable copy of path
+    directory_entry *parent;
+    int index = -1;
+    char *lastElement = NULL;
 
-//     // validate the path
-//     int parseResult = ParsePath(pathCopy, &parent, &index, &lastElement);
-//     free(pathCopy);  // Clean up path copy after parsing
+    // validate the path
+    int parseResult = ParsePath(pathCopy, &parent, &index, &lastElement);
+    free(pathCopy);  // Clean up path copy after parsing
 
-//     if (parseResult != 0 || index == -1) return -1;  // Path invalid or last element not found
+    if (parseResult != 0 || index == -1) return -1;  // Path invalid or last element not found
 
-//     // Check if the final element is a directory
-//     if (parent[index].is_directory != 1) return -1;
+    // Check if the final element is a directory
+    if (parent[index].is_directory != 1) return -1;
 
-//     // Load the new directory
-//     directory_entry *temp = loadDir(&parent[index]);
-//     if (temp == NULL) return -1; // Directory loading failed
+    // Load the new directory
+    directory_entry *temp = loadDir(&parent[index]);
+    if (temp == NULL) return -1; // Directory loading failed
 
-//     // Free the current loadedCWD if it's not root
-//     if (vcb->cwdPtr != vcb->root_dir_ptr) {
-//         freeDirectory(vcb->cwdPtr);
-//     }
+    // Free the current loadedCWD if it's not root
+    if (vcb->cwdLoadDE != vcb->root_dir_ptr) {
+        freeDirectory(vcb->cwdLoadDE);
+    }
 
-//     vcb->cwdPtr = temp;  // Update loadedCWD to the new directory
+    vcb->cwdLoadDE = temp;  // Update loadedCWD to the new directory
 
-//     // Update the cwdString
-//     char *newCwdString;
-//     if (pathname[0] == '/') {
-//         // Absolute path, set cwdString directly
-//         newCwdString = strdup(pathname);
-//     } else {
-//         // Relative path, concatenate with the current cwdString
-//         size_t newSize = strlen(vcb->cwdStr) + strlen(pathname) + 2; // Extra space for "/" and null terminator
-//         newCwdString = malloc(newSize);
-//         snprintf(newCwdString, newSize, "%s%s", vcb->cwdStr, pathname);
-//     }
+    // Update the cwdString
+    char *newCwdString;
+    if (pathname[0] == '/') {
+        // Absolute path, set cwdString directly
+        newCwdString = strdup(pathname);
+    } else {
+        // Relative path, concatenate with the current cwdString
+        size_t newSize = strlen(vcb->cwdStrPath) + strlen(pathname) + 2; // Extra space for "/" and null terminator
+        newCwdString = malloc(newSize);
+        snprintf(newCwdString, newSize, "%s%s", vcb->cwdStrPath, pathname);
+    }
 
-//     // Ensure the path ends with a trailing slash
-//     if (newCwdString[strlen(newCwdString) - 1] != '/') {
-//         size_t newSize = strlen(newCwdString) + 2;
-//         newCwdString = realloc(newCwdString, newSize);
-//         strcat(newCwdString, "/");
-//     }
+    // Ensure the path ends with a trailing slash
+    if (newCwdString[strlen(newCwdString) - 1] != '/') {
+        size_t newSize = strlen(newCwdString) + 2;
+        newCwdString = realloc(newCwdString, newSize);
+        strcat(newCwdString, "/");
+    }
 
-//     // Collapse /./ and /../ in the newCwdString
-//     char *collapsedPath = collapsePath(newCwdString);
-//     free(newCwdString);  // Free temporary path
+    // Collapse /./ and /../ in the newCwdString
+    char *collapsedPath = collapsePath(newCwdString);
+    free(newCwdString);  // Free temporary path
 
-//     // Update cwdString to collapsed path
-//     if (vcb->cwdStr != NULL) free(vcb->cwdStr);
-//     vcb->cwdStr = collapsedPath;
+    // Update cwdString to collapsed path
+    if (vcb->cwdStrPath != NULL) free(vcb->cwdStrPath);
+    vcb->cwdStrPath = collapsedPath;
 
-//     return 0;
-// }
+    return 0;
+}
 
-// // Helper function to collapse /./ and /../ sequences in the path
-// char* collapsePath(char *path) {
-//     char *tokens[256];    // Array of pointers to tokens (vector table)
-//     int indexTable[256];   // Index table to help build the final path
-//     int index = 0;
+// Helper function to collapse /./ and /../ sequences in the path
+char* collapsePath(char *path) {
+    char *tokens[256];    // Array of pointers to tokens (vector table)
+    int indexTable[256];   // Index table to help build the final path
+    int index = 0;
 
-//     // Tokenize the path
-//     char *savePtr;
-//     char *token = strtok_r(path, "/", &savePtr);
-//     int tokenCount = 0;
+    // Tokenize the path
+    char *savePtr;
+    char *token = strtok_r(path, "/", &savePtr);
+    int tokenCount = 0;
 
-//     while (token != NULL) {
-//         tokens[tokenCount++] = token;
-//         token = strtok_r(NULL, "/", &savePtr);
-//     }
+    while (token != NULL) {
+        tokens[tokenCount++] = token;
+        token = strtok_r(NULL, "/", &savePtr);
+    }
 
-//     // Process each token to handle . and ..
-//     for (int i = 0; i < tokenCount; i++) {
-//         if (strcmp(tokens[i], ".") == 0) {
-//             // Ignore single dot
-//             continue;
-//         } else if (strcmp(tokens[i], "..") == 0) {
-//             // Handle double dot by moving back in index unless at the root
-//             if (index > 0) index--;
-//         } else {
-//             // Normal directory entry
-//             indexTable[index++] = i;
-//         }
-//     }
+    // Process each token to handle . and ..
+    for (int i = 0; i < tokenCount; i++) {
+        if (strcmp(tokens[i], ".") == 0) {
+            // Ignore single dot
+            continue;
+        } else if (strcmp(tokens[i], "..") == 0) {
+            // Handle double dot by moving back in index unless at the root
+            if (index > 0) index--;
+        } else {
+            // Normal directory entry
+            indexTable[index++] = i;
+        }
+    }
 
-//     // Build the collapsed path string
-//     size_t finalSize = 2; // Starting size for root "/" and null terminator
-//     for (int i = 0; i < index; i++) {
-//         finalSize += strlen(tokens[indexTable[i]]) + 1;
-//     }
+    // Build the collapsed path string
+    size_t finalSize = 2; // Starting size for root "/" and null terminator
+    for (int i = 0; i < index; i++) {
+        finalSize += strlen(tokens[indexTable[i]]) + 1;
+    }
 
-//     char *collapsedPath = malloc(finalSize);
-//     if (collapsedPath == NULL) return NULL;
+    char *collapsedPath = malloc(finalSize);
+    if (collapsedPath == NULL) return NULL;
 
-//     strcpy(collapsedPath, "/"); // Start with root
-//     for (int i = 0; i < index; i++) {
-//         strcat(collapsedPath, tokens[indexTable[i]]);
-//         strcat(collapsedPath, "/");
-//     }
+    strcpy(collapsedPath, "/"); // Start with root
+    for (int i = 0; i < index; i++) {
+        strcat(collapsedPath, tokens[indexTable[i]]);
+        strcat(collapsedPath, "/");
+    }
 
-//     return collapsedPath;
-// }
+    return collapsedPath;
+}

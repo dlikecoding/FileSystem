@@ -26,6 +26,10 @@
 
 #include "b_io.h"
 
+#include "structs/ParsePath.h"
+#include "structs/VCB.h"
+#include "fsLow.h"
+
 #include <dirent.h>
 #include <sys/stat.h>
 

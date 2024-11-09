@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "vcb.h": "c"
+        "vcb.h": "c",
+        "mfs.h": "c",
+        "dirent.h": "c"
     }
 }

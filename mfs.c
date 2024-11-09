@@ -16,12 +16,9 @@
 **************************************************************/
 
 #include "mfs.h"
-#include "structs/DE.h"
-#include "structs/VCB.h"
-#include "fsLow.h"
 
 // Parses a path string to find the directory and the last element name.
-int ParsePath(const char *path, directory_entry **retParent, int *index, char **lastElement) {
+int parsePath(const char *path, parsepath_st results) {
     if (path == NULL || strlen(path) == 0) return -1; // Invalid path
 
     // Start from root or CWD based on absolute or relative path
@@ -36,9 +33,9 @@ int ParsePath(const char *path, directory_entry **retParent, int *index, char **
     
     // If there’s no token, the path is the root directory itself
     if (token1 == NULL) {
-        *retParent = parent;
-        *lastElement = NULL;
-        *index = 0;
+        results.parent = parent;
+        results.lastElement = NULL;
+        results.lastIndex = 0;
         return 0;
     }
     // printf("== index: %ls - path: %s  ===\n", index, token1);
@@ -50,9 +47,9 @@ int ParsePath(const char *path, directory_entry **retParent, int *index, char **
         if (idx == -1) return -1;  // Path component not found
 
         if (token2 == NULL) { // Last token in the path
-            *retParent = parent;
-            *lastElement = token1;
-            *index = idx;
+            results.parent = parent;
+            results.lastElement = token1;
+            results.lastIndex = idx;
             return 0;
         }
         
@@ -139,7 +136,7 @@ directory_entry* loadDir(directory_entry *dir) {
     directory_entry *loadedDE = (directory_entry *)malloc(bytesNeeded);
     if (loadedDE == NULL) return NULL; // Memory allocation failed
 
-    int status = LBAread(&loadedDE, blocksNeeded, dir->data_blocks.startLoc);
+    int status = LBAread(&loadedDE, blocksNeeded, dir->extents[0].startLoc);
     if (status < blocksNeeded) {
         printf("Can not load directory");
         return NULL;

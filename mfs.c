@@ -1,20 +1,3 @@
-/**************************************************************
-* Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
-* Student IDs:: 923091933, 924254653, 922810925, 918157791
-* GitHub-Name:: dlikecoding
-* Group-Name:: 0xAACD
-* Project:: Basic File System
-*
-* File:: mfs.h
-*
-* Description:: 
-*	This is the file system interface.
-*	This is the interface needed by the driver to interact with
-*	your filesystem.
-*
-**************************************************************/
-
 #include "mfs.h"
 
 // Parses a path string to find the directory and the last element name.
@@ -38,7 +21,7 @@ int parsePath(const char *path, parsepath_st results) {
         results.lastIndex = 0;
         return 0;
     }
-    // printf("== index: %ls - path: %s  ===\n", index, token1);
+    
     // Iterate through tokens to traverse the path
     while (token1 != NULL) {
         token2 = strtok_r(NULL, "/", &savePtr); // Check if there are more tokens

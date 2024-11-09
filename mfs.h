@@ -44,7 +44,7 @@ typedef u_int64_t uint64_t;
 typedef u_int32_t uint32_t;
 #endif
 
-int ParsePath(const char *path, directory_entry **retParent, int *index, char **lastElement);
+int ParsePath(const char *path, parsepath_st parser);
 int findInDir(directory_entry *parent, char *name);
 directory_entry* loadDir(directory_entry *directoryEntry);
 void freeDirectory(directory_entry *dir);

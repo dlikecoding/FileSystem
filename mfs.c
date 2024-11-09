@@ -256,3 +256,163 @@ char* collapsePath(char *path) {
 
     return collapsedPath;
 }
+
+
+
+
+///////////////////////////////////////////////////////////////////////////
+
+
+int fs_setcwd(const char *pathname) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+    
+    if (ParsePath(pathname, &parent, &index, &lastElementName) != 0 || index == -1) {
+        return -1;
+    }
+
+    if (parent[index].is_directory != 1) {
+        return -1;
+    }
+
+    directory_entry *newDir = loadDirectoryEntry(parent[index].data_blocks.extents[0].startLoc);
+    if (!newDir) {
+        return -1;
+    }
+
+    if (loadedCWD != rootDir) releaseDirectory(loadedCWD);
+    loadedCWD = newDir;
+
+    free(cwdPath);
+    cwdPath = strdup(pathname);
+    return 0;
+}
+
+int fs_getcwd(char *pathname, size_t size) {
+    if (strlen(cwdPath) >= size) return -1;
+    strncpy(pathname, cwdPath, size - 1);
+    pathname[size - 1] = '\0';
+    return 0;
+}
+
+int fs_isFile(const char *path) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+    
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return 0;
+    return (parent[index].is_directory == 0 && parent[index].is_used);
+}
+
+int fs_isDir(const char *path) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+    
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return 0;
+    return (parent[index].is_directory == 1 && parent[index].is_used);
+}
+
+int fs_mkdir(const char *pathname, mode_t mode) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+
+    if (ParsePath(pathname, &parent, &index, &lastElementName) != 0 || index != -1) {
+        return -1;
+    }
+
+    directory_entry *newDir = createDirectory(DIRECTORY_ENTRIES, parent);
+    if (!newDir) {
+        return -1;
+    }
+
+    strncpy(newDir[0].file_name, lastElementName, MAX_FILENAME - 1);
+    newDir[0].file_name[MAX_FILENAME - 1] = '\0';
+    newDir[0].is_directory = 1;
+    newDir[0].is_used = 1;
+
+    if (writeDirHelper(newDir) == -1) {
+        releaseDirectory(newDir);
+        return -1;
+    }
+
+    addEntryToParent(parent, newDir);
+    return 0;
+}
+
+DIR *fs_opendir(const char *path) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+    
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return NULL;
+    if (parent[index].is_directory != 1) return NULL;
+    
+    return (DIR *)loadDirectoryEntry(parent[index].data_blocks.extents[0].startLoc);
+}
+
+directory_entry *fs_readdir(DIR *dir) {
+    static int readIndex = 0;
+    directory_entry *entries = (directory_entry *)dir;
+
+    while (readIndex < DIRECTORY_ENTRIES) {
+        if (entries[readIndex].is_used) {
+            return &entries[readIndex++];
+        }
+        readIndex++;
+    }
+
+    readIndex = 0; // Reset for next call
+    return NULL;
+}
+
+int fs_closedir(DIR *dir) {
+    releaseDirectory((directory_entry *)dir);
+    return 0;
+}
+
+int fs_stat(const char *path, struct stat *buf) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return -1;
+
+    memset(buf, 0, sizeof(struct stat));
+    buf->st_mode = parent[index].is_directory ? S_IFDIR : S_IFREG;
+    buf->st_size = parent[index].file_size;
+    buf->st_atime = parent[index].access_time;
+    buf->st_mtime = parent[index].modification_time;
+    buf->st_ctime = parent[index].creation_time;
+    return 0;
+}
+
+int fs_delete(const char *path) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return -1;
+    if (parent[index].is_directory) return -1;
+
+    releaseBlocksAndCleanup(parent[index].data_blocks);
+    parent[index].is_used = 0;
+    return 0;
+}
+
+int fs_rmdir(const char *path) {
+    directory_entry *parent;
+    int index;
+    char *lastElementName;
+
+    if (ParsePath(path, &parent, &index, &lastElementName) != 0 || index == -1) return -1;
+    if (parent[index].is_directory == 0 || parent[index].file_size > 2 * sizeof(directory_entry)) return -1;
+
+    //Get extents and release all the block.
+    // set this dir to unused
+    releaseDirectory(&parent[index]);
+    parent[index].is_used = 0;
+    return 0;
+}

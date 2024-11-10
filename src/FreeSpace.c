@@ -146,7 +146,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     
     if (reqBlockStatus == -1){
         printf("--------- ERROR - Unable to allocate blocks ---------\n");
-        releaseExtents(&requestBlocks);
+        freeExtents(&requestBlocks);
         return requestBlocks;
     }
 
@@ -324,7 +324,7 @@ int createExtentTables(int nBlocks, int nContiguous) {
         return -1;
     }
     int extLoc = aBlocks.extents[0].startLoc;
-    releaseExtents(&aBlocks);
+    freeExtents(&aBlocks);
     return extLoc;
 }
 
@@ -416,17 +416,22 @@ int isOverlap(extent_st existExt, int addExtStart, int addExtCount) {
     if (subEnd < existExt.startLoc || addExtStart > end) {
         return 0;  // Outside
     }
-    printf("--- WARNING: Extent is overlap, check your system ---");
+    printf("--- WARNING: Extent is overlap, check your system ---\n");
     return -1;
 }
 
 /** Allocates memory for a specified number of blocks in the filesystem
  * @return a pointer to the allocated memory or NULL if allocation fails
  */
-void releaseExtents(extents_st *reqBlocks) {
+void freeExtents(extents_st *reqBlocks) {
     if (!reqBlocks && !reqBlocks->extents) {
         freePtr(&reqBlocks->extents, "blocks allocate");
         reqBlocks->extents = NULL;
     } reqBlocks->size = 0;
 }
 
+void returnExtents(extents_st returnExt) {
+    for (size_t i = 0; i < returnExt.size ; i++) {
+        releaseBlocks(returnExt.extents[i].startLoc, returnExt.extents[i].countBlock);
+    }
+}

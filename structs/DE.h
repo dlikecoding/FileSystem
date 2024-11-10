@@ -23,11 +23,11 @@
 #include "FreeSpace.h"  // Add this to get access to releaseBlocks
 
 #define MAX_FILENAME 32
-#define MAX_EXTENTS 16    // Maximum number of extents
+#define MAX_EXTENTS 8    // Maximum number of extents
 
 #define UNUSED_ENTRY '\0' // Marker for unused entries
-#define DIRECTORY_ENTRIES 50
-//SIZE OF DE 40 + 32 + 128 = 200
+#define DIRECTORY_ENTRIES 50 
+//SIZE OF DE 40 + 32 + 64 = 136
 typedef struct {
     time_t creation_time;         // creation time of the file or directory
     time_t modification_time;     // last modification time

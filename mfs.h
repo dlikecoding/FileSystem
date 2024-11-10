@@ -15,9 +15,6 @@
 *
 **************************************************************/
 
-
-#include "structs/DE.h"
-
 #ifndef _MFS_H
 #define _MFS_H
 #include <sys/types.h>
@@ -37,6 +34,8 @@
 #define FT_DIRECTORY DT_DIR
 #define FT_LINK	DT_LNK
 
+#define MAX_TOKENS 1024
+
 #ifndef uint64_t
 typedef u_int64_t uint64_t;
 #endif
@@ -44,12 +43,11 @@ typedef u_int64_t uint64_t;
 typedef u_int32_t uint32_t;
 #endif
 
-int ParsePath(const char *path, parsepath_st parser);
-int findInDir(directory_entry *parent, char *name);
-directory_entry* loadDir(directory_entry *directoryEntry);
-void freeDirectory(directory_entry *dir);
-
-// char* collapsePath(char *path);
+int parsePath(const char* path, parsepath_st* parser);
+int findInDir(directory_entry* parent, char* name);
+directory_entry* loadDir(directory_entry* directoryEntry);
+void freeDirectory(directory_entry* dir);
+void cleanPath(const char* path, char* newPath);
 
 // This structure is returned by fs_readdir to provide the caller with information
 // about each file as it iterates through a directory
@@ -85,9 +83,9 @@ int fs_closedir(fdDir *dirp);
 
 // Misc directory functions
 char * fs_getcwd(char *pathname, size_t size);
-int fs_setcwd(char *pathname);   //linux chdir
+int fs_setcwd(char *pathname);  //linux chdir
 int fs_isFile(char * filename);	//return 1 if file, 0 otherwise
-int fs_isDir(char * pathname);		//return 1 if directory, 0 otherwise
+int fs_isDir(char * pathname);	//return 1 if directory, 0 otherwise
 int fs_delete(char* filename);	//removes a file
 
 

@@ -38,6 +38,7 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     
     // Read first block on disk & return if error
     if (LBAread(vcb, 1, 0) < 1) return -1;
+    
     vcb->free_space_map = NULL; 
     vcb->root_dir_ptr = NULL;
     vcb->fs_st.terExtTBMap = NULL;
@@ -45,36 +46,41 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     // Initialize current working directory
     vcb->cwdStrPath = "/";
     vcb->cwdLoadDE = NULL;
-
+    
     // Signature is matched with current File System
     if (vcb->signature == SIGNATURE) {
 		
         vcb->free_space_map = loadFreeSpaceMap(FREESPACE_START_LOC);
         vcb->root_dir_ptr = readDirHelper(vcb->root_loc);
-        
+        // vcb->cwdLoadDE = vcb->root_dir_ptr;
+
 		if (vcb->root_dir_ptr == NULL || vcb->free_space_map == NULL ) return -1;
 
-        printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
+
+
+        // printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
         // for (size_t i = 0; i < 2 ; i++) {
-		// 	printf("============== [ %d, %d ] =============\n", 
-        //     vcb->root_dir_ptr->data_blocks.extents[i].startLoc, 
-        //     vcb->root_dir_ptr->data_blocks.extents[i].countBlock);
+			// printf("============== [ %d, %d ] =============\n", 
+            // vcb->root_dir_ptr->extents->startLoc, 
+            // vcb->root_dir_ptr->extents->countBlock);
 		// }
 
 		/* TEST ALLOCATE */
-		// for (size_t i = 0; i < 8000 ; i++) {
-		// 	extents_st test = allocateBlocks(2, 2);
-		// 	if (test.extents != NULL) {
-		// 		printf("============== [%d: %d] =============\n", test.extents[0].startLoc, test.extents[0].countBlock);
+		// extents_st test = allocateBlocks(19500, 0);
+
+		/* TEST RELEASE */
+		// for (size_t id = 40; id < 500 ; id++) { //1024
+		// 	if (id % 2 == 0) {
+		// 		int test = releaseBlocks(id, 2);
+		// 		printf("============== currentA: %d (%ld, 1) =============\n", vcb->fs_st.curExtentLBA, id);
 		// 	}
 		// }
 
-		/* TEST RELEASE */
-		// for (size_t id = 30; id < 5000 ; id++) { //1024
-		// 	if (id % 2 == 0) {
-		// 		int test = releaseBlocks(id, 1);
-		// 		printf("============== currentA: %d (%ld, 1) =============\n", vcb->fs_st.curExtentLBA, id);
-		// 	}
+        // directory_entry* newDir = createDirectory(DIRECTORY_ENTRIES, vcb->root_dir_ptr);
+        // directory_entry* newDir = readDirHelper(42);
+        
+        // for (size_t i = 0; i < newDir->ext_length ; i++) { //vcb->fs_st.extentLength
+		// 	printf( "newDir: [%d: %d]\n", newDir->extents[i].startLoc, newDir->extents[i].countBlock);
 		// }
 
 		// int secondTab = getSecTBLocation(0);
@@ -87,19 +93,18 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
         //                     vcb->free_space_map[i].countBlock);
 		// }
 		
-
+        /** Tertiary Extent Table */
 		// for (size_t i = 0; i < 10 ; i++) { //vcb->fs_st.extentLength
 		// 	printf("============== [ --- %d --- ] =============\n", vcb->fs_st.terExtTBMap[i]);
 		// }
 
-        // printf("\n --- Total Blocks Free: %d - Extent Length: %d - terExtTBLoc: %d --- \n", 
-        //                     vcb->fs_st.totalBlocksFree, 
-        //                     vcb->fs_st.extentLength, 
-        //                     vcb->fs_st.terExtTBLoc);
-        
+        printf("\n --- Total Blocks Free: %d - Extent Length: %d - terExtTBLoc: %d --- \n", 
+                            vcb->fs_st.totalBlocksFree, 
+                            vcb->fs_st.extentLength, 
+                            vcb->fs_st.terExtTBLoc);
         return 0;
     }
-    
+
     // When sig not found - Initialize a new disk and reformat
     printf("Initialize a new disk and reformat ... \n");
     strcpy(vcb->volume_name, "FS-Project");
@@ -115,9 +120,17 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     vcb->root_dir_ptr = createDirectory(DIRECTORY_ENTRIES, NULL);
     if (vcb->root_dir_ptr == NULL) return -1;
     
-    // DirectoryEntry location start after FreeSpace loc
+    // Initialize root LBA location
     vcb->root_loc = vcb->root_dir_ptr->extents[0].startLoc;
+    
+    // Initialize current working directory pointer
+    // vcb->cwdLoadDE = vcb->root_dir_ptr;
 
+    printf("\n --- Total Blocks Free: %d - Extent Length: %d - terExtTBLoc: %d --- \n", 
+                            vcb->fs_st.totalBlocksFree, 
+                            vcb->fs_st.extentLength, 
+                            vcb->fs_st.terExtTBLoc);
+    
     return 0;
 }
 	
@@ -135,6 +148,9 @@ void exitFileSystem ()
     freePtr(vcb->free_space_map, "Free Space");
     
     freePtr(vcb->root_dir_ptr, "Directory Entry");
+    // freePtr(vcb->cwdLoadDE, "CWD DE loaded");
+
     freePtr(vcb, "Volume Control Block");
+    
     printf ("System exiting\n");
 }

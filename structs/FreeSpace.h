@@ -56,7 +56,7 @@ extent_st* loadFreeSpaceMap(int startLoc);
 
 extents_st allocateBlocks(int nBlocks, int minContinuous);
 int releaseBlocks(int startLoc, int nBlocks);
-
+void returnExtents(extents_st exts);
 
 int addExtent(int startLoc, int countBlock);
 void removeExtent( int startLoc, int i );
@@ -80,7 +80,7 @@ int secondaryTBIndex();
 
 int isOverlap(extent_st existExt, int addExtStart, int addExtCount);
 void pageSwap(int idx, int idxPage);
-void releaseExtents(extents_st* reqBlocks);
+void freeExtents(extents_st* reqBlocks);
 void* allocateMemFS(int nBlocks);
 
 #endif

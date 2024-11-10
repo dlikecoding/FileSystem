@@ -34,9 +34,17 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     int actualEntries = actualBytes / sizeof(directory_entry);
 
     // Retrieve available blocks on disk from fs map for this directory entry
-    extents_st blocksLoc = allocateBlocks(blocksNeeded, blocksNeeded);
-    if (blocksLoc.extents == NULL || blocksLoc.size > MAX_EXTENTS) {
-        releaseExtents(&blocksLoc);
+    extents_st blocksLoc = (blocksLoc.extents == NULL) ? \
+        allocateBlocks(blocksNeeded, blocksNeeded) : allocateBlocks(blocksNeeded, 2);
+
+    // Our system does not support full disk fragmentation. If the number of extents exceeds 
+    // MAX_EXTENTS by more than twice, it means the disk is full and no space available
+    if ( blocksLoc.extents == NULL || blocksLoc.size > MAX_EXTENTS) {
+        printf(" --- ERROR: Failed to allocate blocks for DE --- \n");
+        
+        // Return Blocks to Freespace on error
+        returnExtents(blocksLoc);
+        freeExtents(&blocksLoc);
         return NULL;
     }
 
@@ -55,12 +63,11 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     // Initialize root directory entry "."
     strcpy(newDir[0].file_name, ".");
     
-    /* TODO: Update this to handle multiple extents if needed, as future 
-    versions may support arrays of extents. */ 
+    // Updated this to handle an array of extents
     memcpy(newDir[0].extents, blocksLoc.extents, blocksLoc.size * sizeof(extent_st));
     newDir[0].ext_length = blocksLoc.size;
 
-    releaseExtents(&blocksLoc); // release memory extent when done
+    freeExtents(&blocksLoc); // release memory extent when done
 
     newDir[0].file_size = actualEntries * sizeof(directory_entry);
     newDir[0].is_directory = 1;
@@ -84,13 +91,14 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     newDir[1].access_time = parent[0].access_time;
     newDir[1].modification_time = parent[0].modification_time;
     
-
     // Write created directory structure to disk
     int writeStatus = writeDirHelper(newDir);
     if (writeStatus == -1) {
         freePtr(newDir, "DE DE.c");
         return NULL;
     }
+    printf(" *** Successfully created DE - LBA @ %d *** \n ", newDir->extents[0].startLoc);
+
     return newDir;
 }
 
@@ -98,10 +106,19 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
  * @return 0 on success or -1 on failure
  */
 int writeDirHelper(directory_entry *newDir) {
-    int blocks = computeBlockNeeded(newDir[0].file_size, vcb->block_size);
-    if (LBAwrite(newDir, blocks, newDir[0].extents[0].startLoc) < blocks) {
-        return -1;
+    
+    // if directory entries have continuous blocks
+    if (newDir[0].ext_length == 1) {
+        
+        int blocks = computeBlockNeeded(newDir[0].file_size, vcb->block_size);
+
+        if (LBAwrite(newDir, blocks, newDir[0].extents[0].startLoc) < blocks) {
+            return -1;
+        } return 0;
     }
+
+    // If the block is not continuous, convert DE into a buffer and then write 
+    // DEs to disk according to the number of blocks in each extent
 
     // create a buffer to fill all DEs on mem to disk
     char* newDirBlod = (char*) newDir;
@@ -123,7 +140,12 @@ int writeDirHelper(directory_entry *newDir) {
 /** Load root a directory to memory. 
  * @return 0 on success or -1 on failure
  */
-directory_entry* readDirHelper(int deLoc) {
+directory_entry* readDirHelper(int startLoc) {
+    // prevent LBAread the same location on disk multiple time
+    if (vcb->cwdLoadDE && vcb->cwdLoadDE->extents[0].startLoc == startLoc) {
+        return vcb->cwdLoadDE;
+    }
+
     int blocks = computeBlockNeeded(DIRECTORY_ENTRIES * sizeof(directory_entry), vcb->block_size);
     
     // Allocate memory for the directory entries
@@ -131,21 +153,21 @@ directory_entry* readDirHelper(int deLoc) {
     if (de == NULL) return NULL;
 
     // Read the first time to retrive the DE structure
-    if (LBAread(de, blocks, deLoc) < blocks) {
+    if (LBAread(de, blocks, startLoc) < blocks) {
         freePtr(de, "DE DE.c");
         return NULL;
     }
-     
+
     if (de->ext_length == 1) return de; // Successfully loaded all DEs into memory
     
-    /** Couldn't load all DEs into memory due to discontiguity, meaning 
+    /** Couldn't load all DEs into memory due to discontiguous, meaning 
     the extent length is greater than one. Filling the DE buffer by looping 
     through the extents */ 
 
     // create a buffer to fill all DEs on disk to mem
     char* dePtr = (char*) de; 
     
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < de->ext_length; i++) {
         int startLoc = de->extents[i].startLoc;
         int countBlock = de->extents[i].countBlock;
 

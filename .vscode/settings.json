@@ -2,6 +2,7 @@
     "files.associations": {
         "vcb.h": "c",
         "mfs.h": "c",
-        "dirent.h": "c"
+        "dirent.h": "c",
+        "typeinfo": "c"
     }
 }

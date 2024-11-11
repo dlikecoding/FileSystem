@@ -1,7 +1,7 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen  Atharva Walawalkar
-* Student IDs:: 923091933 924254653
+* Name:: Danish Nguyen 
+* Student IDs:: 923091933
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
 * Project:: Basic File System
@@ -44,9 +44,13 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     vcb->fs_st.terExtTBMap = NULL;
     
     // Initialize current working directory
-    vcb->cwdStrPath = "/";
+    vcb->cwdStrPath = malloc(MAX_PATH_LENGTH);
+    if (!vcb->cwdStrPath) return -1;
+
+    strcpy(vcb->cwdStrPath, "/");
+
     vcb->cwdLoadDE = NULL;
-    
+
     // Signature is matched with current File System
     if (vcb->signature == SIGNATURE) {
 		
@@ -59,10 +63,10 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 
 
         // printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
-        // for (size_t i = 0; i < 2 ; i++) {
-			// printf("============== [ %d, %d ] =============\n", 
-            // vcb->root_dir_ptr->extents->startLoc, 
-            // vcb->root_dir_ptr->extents->countBlock);
+        // for (size_t i = 0; i < 10 ; i++) {
+		// 	printf("[ %s - %d ] \n", 
+        //     vcb->root_dir_ptr[i].file_name, 
+        //     vcb->root_dir_ptr[i].extents->startLoc);
 		// }
 
 		/* TEST ALLOCATE */
@@ -148,7 +152,8 @@ void exitFileSystem ()
     freePtr(vcb->free_space_map, "Free Space");
     
     freePtr(vcb->root_dir_ptr, "Directory Entry");
-    // freePtr(vcb->cwdLoadDE, "CWD DE loaded");
+    freePtr(vcb->cwdLoadDE, "CWD DE loaded");
+    freePtr(vcb->cwdStrPath, "CWD Str Path");
 
     freePtr(vcb, "Volume Control Block");
     

@@ -3,6 +3,7 @@
         "vcb.h": "c",
         "mfs.h": "c",
         "dirent.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "compare": "c"
     }
 }

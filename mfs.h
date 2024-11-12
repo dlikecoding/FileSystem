@@ -47,7 +47,7 @@ int parsePath(const char* path, parsepath_st* parser);
 int findInDir(directory_entry* parent, char* name);
 directory_entry* loadDir(directory_entry* directoryEntry);
 void freeDirectory(directory_entry* dir);
-void cleanPath(const char* path);
+char* cleanPath(const char* path);
 int isDirEmpty(directory_entry *de);
 
 // This structure is returned by fs_readdir to provide the caller with information
@@ -70,7 +70,6 @@ typedef struct fdDir
 	unsigned short  d_reclen;		/* length of this record */
 	unsigned short	dirEntryPosition;	/* which directory entry position, like file pos */
 	directory_entry * directory;		/* Pointer to the loaded directory you want to iterate */
-	directory_entry * originalDE;	/* To release memory when interate is done */
 	struct fs_diriteminfo * di;		/* Pointer to the structure you return from read */
 	} fdDir;
 
@@ -107,4 +106,3 @@ struct fs_stat
 int fs_stat(const char *path, struct fs_stat *buf);
 
 #endif
-

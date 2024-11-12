@@ -205,7 +205,7 @@ int releaseBlocks(int startLoc, int countBlocks) {
     vcb->fs_st.totalBlocksFree += countBlocks; // Update total free blocks
 
     writeFSToDisk(vcb->fs_st.curExtentLBA);
-    printf("====RELEASED [%d: %d] - Status: OK======\n", startLoc, countBlocks);
+    // printf("====RELEASED [%d: %d] - Status: OK======\n", startLoc, countBlocks);
     return 0;
 }
 

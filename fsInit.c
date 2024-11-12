@@ -44,7 +44,7 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     vcb->fs_st.terExtTBMap = NULL;
     
     // Initialize current working directory
-    vcb->cwdStrPath = malloc(MAX_PATH_LENGTH);
+    vcb->cwdStrPath = malloc(1);
     if (!vcb->cwdStrPath) return -1;
 
     strcpy(vcb->cwdStrPath, "/");
@@ -62,12 +62,14 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 
 
 
-        // printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
-        // for (size_t i = 0; i < 10 ; i++) {
-		// 	printf("[ %s - %d ] \n", 
-        //     vcb->root_dir_ptr[i].file_name, 
-        //     vcb->root_dir_ptr[i].extents->startLoc);
-		// }
+        printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
+        for (size_t i = 0; i < DIRECTORY_ENTRIES ; i++) {
+			if (vcb->root_dir_ptr[i].is_used == 1) {
+                printf("[ %s - %d ] \n", 
+                vcb->root_dir_ptr[i].file_name, 
+                vcb->root_dir_ptr[i].extents->startLoc);
+            }  
+		}
 
 		/* TEST ALLOCATE */
 		// extents_st test = allocateBlocks(19500, 0);

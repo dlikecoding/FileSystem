@@ -48,4 +48,6 @@ directory_entry* createDirectory(int numEntries, directory_entry *parent);
 
 int writeDirHelper(directory_entry *newDir);
 directory_entry* readDirHelper(int dirLoc);
+
+int sizeOfDE (directory_entry* de);
 #endif

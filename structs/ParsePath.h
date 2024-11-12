@@ -18,7 +18,7 @@
 #include "DE.h"
 
 /** ParsePath Structure to hold the result of parsing a path
- * { directory_entry, int, char* } */
+ * { directory_entry*, int, char* } */
 typedef struct {
     directory_entry *retParent; // Parent directory entry
     int index;                  // Index of element in the parent

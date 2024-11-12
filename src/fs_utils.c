@@ -31,7 +31,7 @@ int min(int a, int b) {
 // Frees memory allocated forfree space map and resets the pointer
 void freePtr(void* ptr, char* type){
     if (ptr) {
-        printf ("Release %s pointer ...\n", type);
+        // printf ("Release %s pointer ...\n", type);
         free(ptr);
         ptr = NULL;
     }

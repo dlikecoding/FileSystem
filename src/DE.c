@@ -1,6 +1,6 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
-* Name:: Danish Nguyen, Atharva Walawalkar, Cheryl Fong
+* Name:: Danish Nguyen, Atharva Walawalkar
 * Student IDs:: 923091933, 924254653, 918157791
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
@@ -23,7 +23,8 @@
  * as a subdirectory of a given parent directory. It calculates required space, allocates 
  * memory, sets up initial entries for current (".") and parent ("..") links, and writes 
  * the directory to disk.
- * @return a pointer to the created directory or NULL if failure 
+ * @return a pointer to the created directory or NULL if failure
+ * @author Danish Nguyen
  */
 directory_entry *createDirectory(int numEntries, directory_entry *parent) {
 
@@ -104,6 +105,7 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
 
 /** Writes a directory to disk at the specified location. 
  * @return 0 on success or -1 on failure
+ * @author Danish Nguyen, Atharva Walawalkar
  */
 int writeDirHelper(directory_entry *newDir) {
     
@@ -139,9 +141,10 @@ int writeDirHelper(directory_entry *newDir) {
 
 /** Load root a directory to memory. 
  * @return 0 on success or -1 on failure
+ * @author Danish Nguyen
  */
 directory_entry* readDirHelper(int startLoc) {
-    // prevent LBAread the same location on disk multiple time
+    // Prevent multiple reads of the same LBA on disk
     if (vcb->cwdLoadDE && vcb->cwdLoadDE->extents[0].startLoc == startLoc) {
         return vcb->cwdLoadDE;
     }
@@ -179,4 +182,10 @@ directory_entry* readDirHelper(int startLoc) {
         dePtr += (countBlock * vcb->block_size);
     }
     return de;
+}
+
+
+// Calculates number of directory entries.
+int sizeOfDE (directory_entry* de) {
+    return de[0].file_size / sizeof(directory_entry);
 }

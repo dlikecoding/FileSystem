@@ -95,7 +95,7 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     // Write created directory structure to disk
     int writeStatus = writeDirHelper(newDir);
     if (writeStatus == -1) {
-        freePtr(newDir, "DE DE.c");
+        freePtr(&newDir, "DE DE.c");
         return NULL;
     }
     printf(" *** Successfully created DE - LBA @ %d *** \n ", newDir->extents[0].startLoc);
@@ -144,10 +144,6 @@ int writeDirHelper(directory_entry *newDir) {
  * @author Danish Nguyen
  */
 directory_entry* readDirHelper(int startLoc) {
-    // Prevent multiple reads of the same LBA on disk
-    if (vcb->cwdLoadDE && vcb->cwdLoadDE->extents[0].startLoc == startLoc) {
-        return vcb->cwdLoadDE;
-    }
 
     int blocks = computeBlockNeeded(DIRECTORY_ENTRIES * sizeof(directory_entry), vcb->block_size);
     
@@ -157,7 +153,7 @@ directory_entry* readDirHelper(int startLoc) {
 
     // Read the first time to retrive the DE structure
     if (LBAread(de, blocks, startLoc) < blocks) {
-        freePtr(de, "DE DE.c");
+        freePtr(&de, "DE DE.c");
         return NULL;
     }
 
@@ -175,13 +171,47 @@ directory_entry* readDirHelper(int startLoc) {
         int countBlock = de->extents[i].countBlock;
 
         if (LBAread(dePtr, countBlock, startLoc) < countBlock) {
-            freePtr(de, "DE DE.c");
+            freePtr(&de, "DE DE.c");
             return NULL;
         }
         // move pointer to the next position in the buffer
         dePtr += (countBlock * vcb->block_size);
     }
     return de;
+}
+
+/** Loads a directory from disk based on parent directory and its index
+ * @return directory entry that loaded on disk to memory
+ * @anchor Danish Nguyen
+ */
+directory_entry* loadDir(directory_entry *de) {
+    if (de == NULL || de->is_directory != 1) return NULL; // Invalid DE
+    
+    // Prevent multiple reads of the same LBA on disk
+    // if the new directory entry to load has the same location as root, point to root
+    if (vcb->root_dir_ptr && vcb->root_dir_ptr->extents->startLoc == de->extents->startLoc) {
+        return vcb->root_dir_ptr;
+    }
+    // if the new directory entry to load has the same location as cwd, point to cwd
+    if (vcb->cwdLoadDE && vcb->cwdLoadDE->extents->startLoc == de->extents->startLoc) {
+        return vcb->cwdLoadDE;
+    }
+
+    return readDirHelper(de->extents->startLoc);
+}
+
+int releaseDeExtents(directory_entry *de, int idx) {
+    for (size_t i = 0; i < de[idx].ext_length ; i++) {
+        int start = de[idx].extents[i].startLoc;
+        int count = de[idx].extents[i].countBlock;
+
+        // Release all blocks associated with the target file or directory to FreeSpace
+        int status = releaseBlocks(start, count);
+        if (status == -1) {
+            printf("Failed to delete the %s. Check for permissions!\n", de[idx].file_name);
+            return -1;
+        }
+    } return 0;
 }
 
 

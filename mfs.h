@@ -45,7 +45,6 @@ typedef u_int32_t uint32_t;
 
 int parsePath(const char* path, parsepath_st* parser);
 int findInDir(directory_entry* parent, char* name);
-directory_entry* loadDir(directory_entry* directoryEntry);
 void freeDirectory(directory_entry* dir);
 char* cleanPath(const char* path);
 int isDirEmpty(directory_entry *de);

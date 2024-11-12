@@ -60,9 +60,7 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 
 		if (vcb->root_dir_ptr == NULL || vcb->free_space_map == NULL ) return -1;
 
-
-
-        printf("============== [ %d ] =============\n", vcb->root_dir_ptr->extents[0].startLoc);
+        // printf("============== [ %d ] =============\n", vcb->cwdLoadDE->extents->startLoc);
         for (size_t i = 0; i < DIRECTORY_ENTRIES ; i++) {
 			if (vcb->root_dir_ptr[i].is_used == 1) {
                 printf("[ %s - %d ] \n", 

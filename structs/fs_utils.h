@@ -22,7 +22,7 @@
 int computeBlockNeeded(int m, int n);
 int min(int a, int b);
 
-void freePtr(void* ptr, char* type);
+void freePtr(void* ptr, const char* type);
 
 
 

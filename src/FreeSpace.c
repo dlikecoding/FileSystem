@@ -65,7 +65,7 @@ extent_st* loadFreeSpaceMap(int startLoc) {
     // Read blocks into memory; release FS Map on failure
     int readStatus = LBAread(extentTable, vcb->fs_st.reservedBlocks, startLoc);
     if (readStatus < vcb->fs_st.reservedBlocks) {
-        freePtr(extentTable, "extentTable");
+        freePtr(&extentTable, "extentTable");
         return NULL;
     }
 
@@ -420,9 +420,7 @@ int isOverlap(extent_st existExt, int addExtStart, int addExtCount) {
     return -1;
 }
 
-/** Allocates memory for a specified number of blocks in the filesystem
- * @return a pointer to the allocated memory or NULL if allocation fails
- */
+//Free memory allocated for an extents_st
 void freeExtents(extents_st *reqBlocks) {
     if (!reqBlocks && !reqBlocks->extents) {
         freePtr(&reqBlocks->extents, "blocks allocate");

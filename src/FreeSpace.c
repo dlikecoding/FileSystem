@@ -51,13 +51,15 @@ extent_st* initFreeSpace(int numberOfBlocks, int blockSize) {
     return extentTable;
 }
 
-/** Loads the whole fs map from disk into memory and retain the map in memory until the 
+/** Loads the fs map from disk into memory and retain the map in memory until the 
  * program terminates.
  * @return extent_st* on success or NULL on error
  */
 extent_st* loadFreeSpaceMap(int startLoc) {
     // Prevent multiple reads of the same free space map from disk
-    if (vcb->free_space_map && startLoc == vcb->fs_st.curExtentLBA) return vcb->free_space_map;
+    if (vcb->free_space_map && startLoc == vcb->fs_st.curExtentLBA) {
+        return vcb->free_space_map;
+    }
     
     // Allocate memory for the free space map
     extent_st* extentTable = (extent_st*) allocateMemFS(vcb->fs_st.reservedBlocks);
@@ -65,7 +67,7 @@ extent_st* loadFreeSpaceMap(int startLoc) {
     // Read blocks into memory; release FS Map on failure
     int readStatus = LBAread(extentTable, vcb->fs_st.reservedBlocks, startLoc);
     if (readStatus < vcb->fs_st.reservedBlocks) {
-        freePtr(&extentTable, "extentTable");
+        freePtr((void**) &extentTable, "extentTable");
         return NULL;
     }
 
@@ -100,7 +102,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     requestBlocks.size = 0;
     
     // Iterate over free space map extents to allocate blocks
-    for (int i = 0; i < vcb->fs_st.extentLength && numBlockReq > 0; i++) {
+    for (int i = (vcb->fs_st.extentLength - 1); i >= 0 && numBlockReq > 0; i--) {
         
         int index = i % vcb->fs_st.maxExtent;
         int indexTable = i / vcb->fs_st.maxExtent - 1;
@@ -142,9 +144,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     }
 
     // If unable to fulfill request due to fragmentation, release allocated blocks
-    int reqBlockStatus = (numBlockReq > 0) ? -1 : 0; 
-    
-    if (reqBlockStatus == -1){
+    if (numBlockReq > 0){
         printf("--------- ERROR - Unable to allocate blocks ---------\n");
         freeExtents(&requestBlocks);
         return requestBlocks;
@@ -155,8 +155,7 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
     if (requestBlocks.extents == NULL) {
         printf("--------- ERROR - Unable to reallocate memory --------- \n");
     }
-
-
+    writeFSToDisk(vcb->fs_st.curExtentLBA);
     return requestBlocks;
 }
 
@@ -167,11 +166,13 @@ extents_st allocateBlocks(int nBlocks, int minContinuous) {
  */
 int releaseBlocks(int startLoc, int countBlocks) {
     // If the specified range exceeds total blocks, return -1 if error
-	int mergeLoc = startLoc + countBlocks;
+	vcb->free_space_map = loadFreeSpaceMap(FREESPACE_START_LOC);
+    
+    int mergeLoc = startLoc + countBlocks;
 
     if (mergeLoc > vcb->total_blocks) return -1;
     
-    int isNotFound = -1;
+    int isNotFound = 1;
 
     // Iterate through the free space map to find a matching extent for merging
     for (int i = 0; i < vcb->fs_st.extentLength; i++) {
@@ -196,6 +197,7 @@ int releaseBlocks(int startLoc, int countBlocks) {
         if (vcb->free_space_map[index].startLoc == -1) {
             vcb->free_space_map[index].startLoc = startLoc;
             vcb->free_space_map[index].countBlock = countBlocks;
+            isNotFound = 0;
             break;
         }
     }
@@ -204,9 +206,8 @@ int releaseBlocks(int startLoc, int countBlocks) {
     if ( isNotFound ) addExtent(startLoc, countBlocks);
     vcb->fs_st.totalBlocksFree += countBlocks; // Update total free blocks
 
-    writeFSToDisk(vcb->fs_st.curExtentLBA);
     // printf("====RELEASED [%d: %d] - Status: OK======\n", startLoc, countBlocks);
-    return 0;
+    return writeFSToDisk(vcb->fs_st.curExtentLBA);
 }
 
 // Adds a new extent to the fs map, specifying starting location and block count.
@@ -420,11 +421,11 @@ int isOverlap(extent_st existExt, int addExtStart, int addExtCount) {
     return -1;
 }
 
+
 //Free memory allocated for an extents_st
 void freeExtents(extents_st *reqBlocks) {
-    if (!reqBlocks && !reqBlocks->extents) {
-        freePtr(&reqBlocks->extents, "blocks allocate");
-        reqBlocks->extents = NULL;
+    if (reqBlocks && reqBlocks->extents) {
+        freePtr((void**) &reqBlocks->extents, "blocks allocate");
     } reqBlocks->size = 0;
 }
 

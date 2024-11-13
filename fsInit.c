@@ -69,13 +69,13 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
             }  
 		}
 
-		/* TEST ALLOCATE */
-		// extents_st test = allocateBlocks(19500, 0);
+		// /* TEST ALLOCATE */
+		// extents_st test = allocateBlocks(19450, 0);
 
-		/* TEST RELEASE */
-		// for (size_t id = 40; id < 500 ; id++) { //1024
-		// 	if (id % 2 == 0) {
-		// 		int test = releaseBlocks(id, 2);
+		// /* TEST RELEASE */
+		// for (size_t id = 40; id < 7000 ; id++) { //1480 extents
+		// 	if (id % 2 != 0) {
+		// 		int test = releaseBlocks(id, 1);
 		// 		printf("============== currentA: %d (%ld, 1) =============\n", vcb->fs_st.curExtentLBA, id);
 		// 	}
 		// }
@@ -87,11 +87,11 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 		// 	printf( "newDir: [%d: %d]\n", newDir->extents[i].startLoc, newDir->extents[i].countBlock);
 		// }
 
-		// int secondTab = getSecTBLocation(0);
+		// int secondTab = getSecTBLocation(2);
 		// printf( "second Table loc: %d\n", secondTab);
 
 		// vcb->free_space_map = loadFreeSpaceMap(secondTab);
-		// for (size_t i = 0; i < 10 ; i++) { //vcb->fs_st.extentLength
+		// for (size_t i = 0; i < 1000 ; i++) { //vcb->fs_st.extentLength
 		// 	printf("============== [ %d: %d ] =============\n", 
         //                     vcb->free_space_map[i].startLoc, 
         //                     vcb->free_space_map[i].countBlock);
@@ -142,20 +142,24 @@ void exitFileSystem ()
 {
     // Write Volumn Control Block back to the disk
     if (LBAwrite(vcb, 1, 0) < 1){
-        printf("Unable to write VCB to disk!\n"); //write unsuccessed
+        printf("Unable to write VCB to disk!\n");
     }
 
     // Write updated free space map to disk; print write failure
-    writeFSToDisk(vcb->fs_st.curExtentLBA);
-
-    freePtr(vcb->fs_st.terExtTBMap, "Tetiary Table");
-    freePtr(vcb->free_space_map, "Free Space");
+    if (writeFSToDisk(vcb->fs_st.curExtentLBA) == -1){
+        printf("Unable to write free space map to disk!\n");
+    }
     
-    freePtr(vcb->root_dir_ptr, "Directory Entry");
-    freePtr(vcb->cwdLoadDE, "CWD DE loaded");
-    freePtr(vcb->cwdStrPath, "CWD Str Path");
+    freePtr((void**) &vcb->fs_st.terExtTBMap, "Tetiary Table");
+    freePtr((void**) &vcb->free_space_map, "Free Space");
+    
+    if (vcb->cwdLoadDE != vcb->root_dir_ptr){
+        freePtr((void**) &vcb->cwdLoadDE, "CWD DE loaded");
+    }
+    freePtr((void**) &vcb->root_dir_ptr, "Directory Entry");
+    freePtr((void**) &vcb->cwdStrPath, "CWD Str Path");
 
-    freePtr(vcb, "Volume Control Block");
+    freePtr((void**) &vcb, "Volume Control Block");
     
     printf ("System exiting\n");
 }

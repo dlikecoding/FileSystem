@@ -37,7 +37,13 @@ void verityDE(directory_entry* de, char* type){
 int deleteBlod(const char* pathname, int isDir) {
     parsepath_st parser = { NULL, -1, "" };
 
-    if (parsePath(pathname, &parser) != 0 || parser.index == -1) return -1; // Can not remove not exist dir
+    if (parsePath(pathname, &parser) != 0) return -1;
+
+    if (parser.index == -1) {
+        printf("rm: %s: No such file or directory\n", parser.lastElement );
+        return -1; // Can not remove not exist dir
+    }
+
     if (parser.retParent[parser.index].is_directory != isDir) return -1;
 
     // If target is a directory, loaded to memory and check if it's empty
@@ -49,7 +55,7 @@ int deleteBlod(const char* pathname, int isDir) {
             printf("Cannot remove '%s': Is a directory and not empty\n", parser.retParent[parser.index].file_name);
             return -1;
         }
-        freePtr(removeDir, "Free rm dir");
+        freePtr((void**) &removeDir, "Free rm dir");
     }
 
     // Mark the target directory/file entry as unused in its parent metadata
@@ -58,11 +64,9 @@ int deleteBlod(const char* pathname, int isDir) {
     if (status == -1) return -1;
 
     // Update the parent directory on disk with the changes
-    if ( writeDirHelper(parser.retParent) == -1) return -1;
-    printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
-    
-    printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
-    return 0;
+    // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
+    // printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
+    return writeDirHelper(parser.retParent);
 }
 
 /** Deletes a file at a specified path
@@ -140,12 +144,11 @@ int fs_mkdir(const char *pathname, mode_t mode) {
         }
     }
 
-    freePtr(newDir, "DE msf.c");
+    freePtr((void**) &newDir, "DE msf.c");
 
-    if (writeDirHelper(parser.retParent) == -1) return -1;
-    printf(" *** fs_mkdir writeDirHelper: [%d] *** \n", parser.retParent->extents->startLoc);
+    // printf(" *** fs_mkdir writeDirHelper: [%d] *** \n", parser.retParent->extents->startLoc);
     
-    return 0;
+    return writeDirHelper(parser.retParent);
 }
 
 /** Parses a path string to find the directory and the last element name
@@ -192,8 +195,6 @@ int parsePath(const char *path, parsepath_st* parser) {
         directory_entry *newParent = loadDir(&parent[idx]);
         if (newParent == NULL) return -1; // Loading directory failed
         
-        printf(" *** ParsePath parent: [%s], newParent: %s *** \n", 
-                                    parent->file_name, newParent->file_name);
         // Selectively free the current parent if it's not root or CWD DE
         freeDirectory(parent);
 
@@ -227,7 +228,7 @@ int findInDir(directory_entry *de, char *name) {
 void freeDirectory(directory_entry *dir) {
     // Don't free global directories
     if (dir == NULL || dir == vcb->root_dir_ptr || dir == vcb->cwdLoadDE) return; 
-    freePtr(dir, "Directory Entry"); // Free the directory entry pointer
+    freePtr((void**) &dir, "Directory Entry"); // Free the directory entry pointer
 }
 
 /** Get current working directory
@@ -245,12 +246,20 @@ char* fs_getcwd(char *pathname, size_t size) {
  * @author Danish Nguyen
 */
 int fs_setcwd(char *pathname) {
-    /** Main part of setcwd is track where user is locate in which DE
-     * Before changed cwd, the path must exist, index is not -1, and destination must be directory
-     * Initial, cwdLoadedDE is NULL when user located in root dir
-     * when user navigate to other DE, cwd will load new DE to memory (do not free root dir)
-     * when user navigate back to the root DE, then free previous DE loaded in cwd, set it to null.
-    */
+    /** Purpose of setcwd is to track user's current DE location
+     * Before changing cwd, the following conditions must be met:
+     * - The path must exist
+     * - The index must not be -1
+     * - The des must be a directory
+     * 
+     * Initially, cwdLoadedDE is set to NULL when user is located in root directory.
+     * 
+     * When user navigates to a different DE, cwdLoadedDE loads a new DE into memory
+     * (root_dir_ptr should never freed)
+     * When user navigates back to root DE, previously loaded DE is freed, 
+     * and cwdLoadedDE is reset to NULL.
+     */
+
     parsepath_st parser = { NULL, -1, "" };
 
     if (parsePath(pathname, &parser) != 0 || parser.index == -1) return -1;
@@ -260,44 +269,25 @@ int fs_setcwd(char *pathname) {
     
     int newDirLoc = parser.retParent[parser.index].extents->startLoc;
 
-    if (vcb->cwdLoadDE && vcb->cwdLoadDE->extents->startLoc == newDirLoc) {
-        printf("************ Current working *************\n");
-    } else if (vcb->root_dir_ptr->extents->startLoc == newDirLoc) {
-        printf("************ Root DE *************\n");
-    } else {
-        printf("************ NEW DE *************\n");
+    // If navigating to another directory entry, ensure cwdLoadDE is not NULL and not pointing to root.
+    // Free the old cwdLoadDE and load the new directory entry from disk.
+    if (vcb->cwdLoadDE && ( vcb->cwdLoadDE != vcb->root_dir_ptr )) {
+        free(vcb->cwdLoadDE);
+        vcb->cwdLoadDE = NULL;
     }
+    // If cwdLoadDE is root_dir_ptr or NULL, load new DE to cwdLoadDE
+    vcb->cwdLoadDE = loadDir(&parser.retParent[parser.index]);
     
-
-    
-    ////////////////////////////////////////////////////////////////////////
-    // if user navigate to root, the newDirLoc is also the root start loc,
-    // then free the cwdLoadDE and set it to null
-    if ( newDirLoc == vcb->root_dir_ptr->extents->startLoc ) {
-        if (vcb->cwdLoadDE) { 
-            freePtr(vcb->cwdLoadDE, "free Loaded DE");
-            vcb->cwdLoadDE = NULL;
-        }
-    } else {
-        // if user navigate to other de, make sure the cwd is not null and not root
-        // Then free the old location and loads the directory entry from disk 
-        // to cwdLoadDE.
-        if (vcb->cwdLoadDE && vcb->cwdLoadDE != vcb->root_dir_ptr) freePtr(&vcb->cwdLoadDE, "Free CWD");
-        vcb->cwdLoadDE = loadDir(&parser.retParent[parser.index]);
-        if (!vcb->cwdLoadDE) return -1;   
-    }
-    //////////////////////////////////////////////////////////////////////
-
     // Create a pointer to point to old cwd string path
     char* oldStrPath = vcb->cwdStrPath;
     
     vcb->cwdStrPath = cleanPath(pathname);
     if (!vcb->cwdStrPath) return -1;
 
-    freePtr(oldStrPath, "CWD Str Path");
+    freePtr((void**) &oldStrPath, "CWD Str Path");
 
     // if ( writeDirHelper(parser.retParent) == -1) return -1;
-    printf("writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
+    // printf("writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
 
     printf(">>> %s\n", vcb->cwdStrPath);
     
@@ -305,9 +295,9 @@ int fs_setcwd(char *pathname) {
 }
 
 
-/** Normalizes a given file path by processing each directory level, resolving any "." 
+/** Sanitized a given path by processing each directory level, resolving any "." 
  * (current directory) or ".." (parent directory) references, and building a clean, 
- * absolute path. Result updates the current working directory path, stored in vcb->cwdStrPath
+ * absolute path. Result updates cwd path and stored in vcb->cwdStrPath
  * @anchor Danish Nguyen
  */
 char* cleanPath(const char* srcPath) {
@@ -416,9 +406,9 @@ int fs_closedir(fdDir *dirp) {
     dirp->directory-= dirp->dirEntryPosition;
     dirp->dirEntryPosition = 0;
 
-    freePtr(dirp->di, "fdDir dir iteminfo");
+    freePtr((void**) &dirp->di, "fdDir dir iteminfo");
     freeDirectory(dirp->directory);
-    freePtr(dirp, "fdDir");
+    freePtr((void**) &dirp, "fdDir");
 
     return 0;
 }

@@ -95,7 +95,7 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
     // Write created directory structure to disk
     int writeStatus = writeDirHelper(newDir);
     if (writeStatus == -1) {
-        freePtr(&newDir, "DE DE.c");
+        freePtr((void**) &newDir, "DE DE.c");
         return NULL;
     }
     printf(" *** Successfully created DE - LBA @ %d *** \n ", newDir->extents[0].startLoc);
@@ -153,7 +153,7 @@ directory_entry* readDirHelper(int startLoc) {
 
     // Read the first time to retrive the DE structure
     if (LBAread(de, blocks, startLoc) < blocks) {
-        freePtr(&de, "DE DE.c");
+        freePtr((void**) &de, "DE DE.c");
         return NULL;
     }
 
@@ -171,7 +171,7 @@ directory_entry* readDirHelper(int startLoc) {
         int countBlock = de->extents[i].countBlock;
 
         if (LBAread(dePtr, countBlock, startLoc) < countBlock) {
-            freePtr(&de, "DE DE.c");
+            freePtr((void**) &de, "DE DE.c");
             return NULL;
         }
         // move pointer to the next position in the buffer

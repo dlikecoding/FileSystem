@@ -17,15 +17,6 @@
 
 #include "mfs.h"
 
-void verityDE(directory_entry* de, char* type){
-    printf("**** %s ****\n", type);
-    if (de) {
-        for (size_t i = 0; i < 10; i++){
-            printf("Verify: %s ---- isUsed: %d  \n", de[i].file_name, de[i].is_used);
-        }
-    }
-    printf("---------//////------------\n");
-}
 
 /** The deleteBlod function deletes a file or directory at a specified path, 
  * ensuring file/directory exists, is the correct type, and is empty if it's a 
@@ -59,14 +50,12 @@ int deleteBlod(const char* pathname, int isDir) {
     }
 
     // Mark the target directory/file entry as unused in its parent metadata
-    parser.retParent[parser.index].is_used = 0;
-    int status = releaseDeExtents(parser.retParent, parser.index);
-    if (status == -1) return -1;
+    int status = removeDE(parser.retParent, parser.index);
 
     // Update the parent directory on disk with the changes
     // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
     // printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
-    return writeDirHelper(parser.retParent);
+    return (status == -1) ? -1 : writeDirHelper(parser.retParent);
 }
 
 /** Deletes a file at a specified path
@@ -118,41 +107,23 @@ int fs_mkdir(const char *pathname, mode_t mode) {
     directory_entry *newDir = createDirectory(DIRECTORY_ENTRIES, parser.retParent);
     if (!newDir) return -1;
 
-    /** Iterates through the parent directory to find an unused entry.
-     * Updates that entry with the last element's name and new DE metadata.
-     * Frees memory allocated for the new directory once the operation is complete.
-     * Writes the changes back to disk after updating.
-     */
-    time_t curTime = time(NULL);
+    int deIdx = makeDirOrFile(parser, 1, newDir);
     
-    for (int i = 0; i < sizeOfDE(newDir); i++) {
-        // Found unused directory entry
-        if (!parser.retParent[i].is_used) {
-            strncpy(parser.retParent[i].file_name, parser.lastElement, MAX_FILENAME);
+    // Nomore entry availible in parent directory
+    if (deIdx == -1) printf("Error - mkdir: Unable to create directory \n");
 
-            memcpy(parser.retParent[i].extents, newDir->extents, newDir->ext_length * sizeof(extent_st));
-            parser.retParent[i].ext_length = newDir->ext_length;
-
-            parser.retParent[i].file_size = newDir->file_size;
-            parser.retParent[i].is_directory = 1;
-            parser.retParent[i].is_used = 1;
-
-            parser.retParent[i].creation_time = curTime;
-            parser.retParent[i].access_time = curTime;
-            parser.retParent[i].modification_time = curTime;
-            break;
-        }
-    }
-
+    /** Frees memory allocated for the new directory once the operation is complete.
+        Writes the changes back to disk after updating. */
     freePtr((void**) &newDir, "DE msf.c");
 
+    // printf(" *** fs_mkdir newDir: [%s] *** \n", parser.retParent[deIdx].file_name);
     // printf(" *** fs_mkdir writeDirHelper: [%d] *** \n", parser.retParent->extents->startLoc);
     
-    return writeDirHelper(parser.retParent);
+    return (deIdx == -1) ? -1 : writeDirHelper(parser.retParent);
 }
 
 /** Parses a path string to find the directory and the last element name
- * @return int status, a pointer to parsepath_st
+ * @return 0 on success or -1 on failure
  * @anchor Danish Nguyen
  */
 int parsePath(const char *path, parsepath_st* parser) {
@@ -164,8 +135,7 @@ int parsePath(const char *path, parsepath_st* parser) {
     
     if (parent == NULL) return -1; //starting directory error
 
-    char pathCopy[MAX_PATH_LENGTH];
-    strncpy(pathCopy, path, MAX_PATH_LENGTH);
+    char *pathCopy = strdup(path);
 
     char *token1, *token2, *savePtr;
     token1 = strtok_r(pathCopy, "/", &savePtr);
@@ -173,6 +143,7 @@ int parsePath(const char *path, parsepath_st* parser) {
     // If there’s no token, the path is the root directory itself
     if (token1 == NULL) {
         *parser = (parsepath_st) { parent, 0, "" };
+        freePtr( (void**) &pathCopy, "pathCopy");
         return 0;
     }
     
@@ -184,16 +155,24 @@ int parsePath(const char *path, parsepath_st* parser) {
         
         if (token2 == NULL) { // Last token in the path
             *parser = (parsepath_st) { parent, idx, "" };
-            strcpy(parser->lastElement, token1);
+            strncpy(parser->lastElement, token1, MAX_FILENAME - 1);
+            parser->lastElement[MAX_FILENAME - 1] = '\0';
+            freePtr( (void**) &pathCopy, "pathCopy");
             return 0;
         }
 
         // Path component not found Or Not a directory
-        if ( (idx == -1) || (!parent[idx].is_directory) ) return -1;
+        if ( (idx == -1) || (!parent[idx].is_directory) ) {
+            freePtr( (void**) &pathCopy, "pathCopy");
+            return -1;
+        }
 
         // Load the next directory level
         directory_entry *newParent = loadDir(&parent[idx]);
-        if (newParent == NULL) return -1; // Loading directory failed
+        if (newParent == NULL) {
+            freePtr( (void**) &pathCopy, "pathCopy");
+            return -1; // Loading directory failed
+        } 
         
         // Selectively free the current parent if it's not root or CWD DE
         freeDirectory(parent);
@@ -201,7 +180,7 @@ int parsePath(const char *path, parsepath_st* parser) {
         parent = newParent;  // Update parent to the newly loaded directory
         token1 = token2; // Move to the next token
     }
-    
+    freePtr( (void**) &pathCopy, "pathCopy");
     return -1;
 }
 
@@ -272,7 +251,7 @@ int fs_setcwd(char *pathname) {
     // If navigating to another directory entry, ensure cwdLoadDE is not NULL and not pointing to root.
     // Free the old cwdLoadDE and load the new directory entry from disk.
     if (vcb->cwdLoadDE && ( vcb->cwdLoadDE != vcb->root_dir_ptr )) {
-        free(vcb->cwdLoadDE);
+        freePtr((void**) &vcb->cwdLoadDE, "CWD Str Path");
         vcb->cwdLoadDE = NULL;
     }
     // If cwdLoadDE is root_dir_ptr or NULL, load new DE to cwdLoadDE
@@ -294,7 +273,6 @@ int fs_setcwd(char *pathname) {
     return 0;
 }
 
-
 /** Sanitized a given path by processing each directory level, resolving any "." 
  * (current directory) or ".." (parent directory) references, and building a clean, 
  * absolute path. Result updates cwd path and stored in vcb->cwdStrPath
@@ -305,14 +283,15 @@ char* cleanPath(const char* srcPath) {
     int curIdx = 0;  // Index of each DE's name in provied path
     
     // duplicate the path for tokenization
-    char pathCopy[strlen(srcPath)];
-    
+    char pathCopy[MAX_PATH_LENGTH];
+    memset(pathCopy, 0, MAX_PATH_LENGTH);
+
     // Start with "/" for absolute paths or current working path
     if (srcPath[0] != '/') {
         strcpy(pathCopy, vcb->cwdStrPath);
-        strcat(pathCopy, srcPath);
+        strncat(pathCopy, srcPath, (MAX_PATH_LENGTH - strlen(vcb->cwdStrPath) - 1) );
     } else {
-        strcpy(pathCopy, srcPath);
+        strncpy(pathCopy, srcPath, (MAX_PATH_LENGTH - 1) );
     }
     
     char *savePtr;
@@ -345,17 +324,15 @@ char* cleanPath(const char* srcPath) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-
 fdDir* fs_opendir(const char *pathname) {
     parsepath_st parser = { NULL, -1, "" };
-    int isValid = parsePath(pathname, &parser); 
-    if (isValid != 0 || parser.index < 0) {
-        printf("Error: Invalid: %d - index: %d \n", isValid, parser.index);
+
+    if (parsePath(pathname, &parser) != 0 || parser.index < 0) {
+        printf("Error: Invalid path - index: %d \n", parser.index);
         return NULL;}
     if (!parser.retParent[parser.index].is_directory) {
-        printf("Error: Invalid - is Not Dir: %d \n", parser.retParent[parser.index].is_directory);
+        printf("Error: Is not a directory: %d \n", parser.retParent[parser.index].is_directory);
         return NULL;}
-    
     
     fdDir* dirp = malloc(sizeof(fdDir));
     if (dirp == NULL) return NULL;
@@ -364,8 +341,8 @@ fdDir* fs_opendir(const char *pathname) {
     dirp->d_reclen = 0;
     dirp->dirEntryPosition = 0;
     
-    dirp->directory = loadDir(&parser.retParent[parser.index]);
-    if (dirp->directory == NULL) return NULL;
+    dirp->de = loadDir(&parser.retParent[parser.index]);
+    if (dirp->de == NULL) return NULL;
 
     dirp->di = malloc(sizeof(struct fs_diriteminfo));
     if (dirp->di == NULL) return NULL;
@@ -376,24 +353,32 @@ fdDir* fs_opendir(const char *pathname) {
 struct fs_diriteminfo* fs_readdir(fdDir* dirp) {
     // printf(" *** fs_diriteminfo: Position: [%d] *** \n", dirp->dirEntryPosition);
     
-    if (dirp == NULL || dirp->directory == NULL || !dirp->directory->is_used) {
+    if (dirp == NULL || dirp->de == NULL || !dirp->de->is_used) {
         return NULL;
     }
 
     // If the last DE has been reached
-    if (dirp->dirEntryPosition >= sizeOfDE(dirp->directory) - 1) return NULL;
-    printf(" name: %s\t%d\t%d\t%d\t%ld\t%d\n", 
-            dirp->directory->file_name, dirp->directory->file_size,
-            dirp->directory->extents->startLoc, dirp->directory->extents->countBlock,
-            dirp->directory->creation_time, dirp->directory->is_used);
+    if (dirp->dirEntryPosition >= sizeOfDE(dirp->de) - 1) return NULL;
+    // printf(" name: %s\t%d\t%d\t%d\t%ld\t%d\n", 
+    //         dirp->de->file_name, dirp->de->file_size,
+    //         dirp->de->extents->startLoc, dirp->de->extents->countBlock,
+    //         dirp->de->creation_time, dirp->de->is_used);
+
+    printf("%3d %3d %3d %6d %-12ld %s\n", 
+           dirp->de->ext_length,
+           dirp->de->is_directory,
+           dirp->de->is_used,
+           dirp->de->file_size, 
+           dirp->de->creation_time, 
+           dirp->de->file_name);
 
     // Populate fs_diriteminfo
     // dirp->di->d_reclen = sizeof(struct fs_diriteminfo);
-    // dirp->di->fileType = (dirp->directory->is_directory) ? '1': '0';
-    // strcpy(dirp->di->d_name, dirp->directory->file_name);
+    // dirp->di->fileType = (dirp->de->is_directory) ? '1': '0';
+    // strncpy(dirp->di->d_name, dirp->de->file_name, MAX_FILENAME - 1);
     
-    // Move to the next entry in the directory
-    dirp->directory++;
+    // Move to the next entry in the de
+    dirp->de++;
     dirp->dirEntryPosition++;
 
     return dirp->di;
@@ -403,15 +388,81 @@ int fs_closedir(fdDir *dirp) {
     if (dirp == NULL) return -1;
     
     // reset posistions
-    dirp->directory-= dirp->dirEntryPosition;
+    dirp->de-= dirp->dirEntryPosition;
     dirp->dirEntryPosition = 0;
 
     freePtr((void**) &dirp->di, "fdDir dir iteminfo");
-    freeDirectory(dirp->directory);
+    freeDirectory(dirp->de);
     freePtr((void**) &dirp, "fdDir");
 
     return 0;
 }
+
+
+
+// fdDir *fs_opendir(const char *pathname) {
+//     parsepath_st parser = { NULL, -1, "" };
+    
+//     int isValid = parsePath(pathname, &parser);
+//     if (isValid != 0 || parser.retParent == NULL || !parser.retParent->is_directory) {
+//         printf("Error: no directory at %s\n", pathname);
+//         return NULL;
+//     }
+
+//     fdDir *dirp = (fdDir *)malloc(sizeof(fdDir));
+//     if (dirp == NULL) {
+//         printf("Error: fdDir malloc failed\n");
+//         return NULL;
+//     }
+
+//     dirp->d_reclen = sizeof(directory_entry);
+//     dirp->dirEntryPosition = 0;
+//     dirp->de = parser.retParent;
+//     dirp->di = NULL;
+
+//     return dirp;
+// }
+
+// struct fs_diriteminfo *fs_readdir(fdDir *dirp) {
+//     if (dirp == NULL || dirp->de == NULL || dirp->dirEntryPosition >= sizeOfDE(dirp->de)) {
+//         return NULL;
+//     }
+
+//     directory_entry *currentEntry = loadDir(&dirp->de[dirp->dirEntryPosition]);
+//     // Skip unused entries
+//     if (!currentEntry->is_used) {
+//         dirp->dirEntryPosition++;
+//         return fs_readdir(dirp);
+//     }
+
+//     // Allocate memory for fs_diriteminfo if needed
+//     if (dirp->di == NULL) {
+//         dirp->di = (struct fs_diriteminfo *)malloc(sizeof(struct fs_diriteminfo));
+//         if (dirp->di == NULL) {
+//             printf("Error: Memory allocation for fs_diriteminfo failed\n");
+//             return NULL;
+//         }
+//     }
+
+//     // Populate the fs_diriteminfo structure with data from the current entry
+//     dirp->di->d_reclen = dirp->d_reclen;
+//     dirp->di->fileType = currentEntry->is_directory ? 'D' : 'F';
+//     strncpy(dirp->di->d_name, currentEntry->file_name, 255);
+//     dirp->di->d_name[255] = '\0';  // Ensure null termination
+
+//     // Move to the next directory entry
+//     dirp->dirEntryPosition++;
+//     return dirp->di;
+// }
+
+// int fs_closedir(fdDir *dirp) {
+//     if (dirp == NULL) return -1;
+//     if (dirp->di != NULL) free(dirp->di);
+
+//     free(dirp);
+//     return 0;
+// }
+
 
 int fs_stat(const char *path, struct fs_stat *buf) {
     parsepath_st parser = { NULL, -1, "" };
@@ -452,4 +503,43 @@ int fs_isDir(char *path) {
  */
 int fs_isFile(char *path) {
     return ( !fs_isDir(path) );
+}
+
+/** Create new file or directory
+ * @returns index in parent DE on success, 0 on failure
+ * @anchor Danish Nguyen
+ */
+int makeDirOrFile(parsepath_st parser, int isDir, directory_entry* newDir){
+    /** Iterates through the parent directory to find an unused entry.
+     * Updates that entry with the last element's name and new DE metadata.*/
+
+    time_t curTime = time(NULL);
+    
+    for (int i = 0; i < sizeOfDE(parser.retParent); i++) {
+        // Found unused directory entry
+        if (!parser.retParent[i].is_used) {
+            memset(parser.retParent[i].file_name, 0, MAX_FILENAME);
+            strncpy(parser.retParent[i].file_name, parser.lastElement, MAX_FILENAME - 1);
+
+            // Create new directory
+            if (isDir && newDir) {
+                memcpy(parser.retParent[i].extents, newDir->extents, newDir->ext_length * sizeof(extent_st));
+                parser.retParent[i].ext_length = newDir->ext_length;
+                parser.retParent[i].is_directory = 1;
+                parser.retParent[i].file_size = newDir->file_size;
+            
+            // Create a new file
+            } else {
+                parser.retParent[i].is_directory = 0;
+                parser.retParent[i].file_size = 0;
+                parser.retParent[i].ext_length = 0;
+            }
+            parser.retParent[i].is_used = 1;
+            parser.retParent[i].creation_time = curTime;
+            parser.retParent[i].access_time = curTime;
+            parser.retParent[i].modification_time = curTime;
+            return i;
+        }
+    }
+    return -1;
 }

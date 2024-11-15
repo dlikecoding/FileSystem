@@ -1,7 +1,7 @@
 /**************************************************************
 * Class::  CSC-415-03 FALL 2024
 * Name:: Danish Nguyen, Atharva Walawalkar
-* Student IDs:: 923091933, 924254653, 918157791
+* Student IDs:: 923091933, 924254653
 * GitHub-Name:: dlikecoding
 * Group-Name:: 0xAACD
 * Project:: Basic File System
@@ -49,15 +49,9 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
         return NULL;
     }
 
-    // Allocate memory for new directory entries
-    directory_entry *newDir = (directory_entry *)malloc(actualBytes);
+    // Allocate memory for new directory entries and set all to NULL
+    directory_entry *newDir = (directory_entry *)calloc(actualEntries, sizeof(directory_entry));
     if (newDir == NULL) return NULL;
-
-    // Initialize self and parent directory entries
-    for (int i = 2; i < actualEntries; i++) {
-        newDir[i].is_used = 0;
-        newDir[i].file_name[0] = UNUSED_ENTRY;  // Mark entry as unused
-    }
 
     time_t currentTime = time(NULL);
 
@@ -148,8 +142,8 @@ directory_entry* readDirHelper(int startLoc) {
     int blocks = computeBlockNeeded(DIRECTORY_ENTRIES * sizeof(directory_entry), vcb->block_size);
     
     // Allocate memory for the directory entries
-    directory_entry* de = (directory_entry*)malloc(blocks * vcb->block_size);
-    if (de == NULL) return NULL;
+    directory_entry* de = (directory_entry*)calloc(blocks, vcb->block_size);
+    if (!de) return NULL;
 
     // Read the first time to retrive the DE structure
     if (LBAread(de, blocks, startLoc) < blocks) {
@@ -200,7 +194,16 @@ directory_entry* loadDir(directory_entry *de) {
     return readDirHelper(de->extents->startLoc);
 }
 
-int releaseDeExtents(directory_entry *de, int idx) {
+/** Remove directory entry and release all blocks associate with it
+ * @return 0 on success, -1 on failure
+ */
+int removeDE(directory_entry *de, int idx) {
+    de[idx].is_used = 0;
+    de[idx].file_size = 0;
+    
+    // Remove file name if it's a directory
+    if (de[idx].is_directory) de[idx].file_name[0] = '\0';
+    
     for (size_t i = 0; i < de[idx].ext_length ; i++) {
         int start = de[idx].extents[i].startLoc;
         int count = de[idx].extents[i].countBlock;
@@ -208,7 +211,7 @@ int releaseDeExtents(directory_entry *de, int idx) {
         // Release all blocks associated with the target file or directory to FreeSpace
         int status = releaseBlocks(start, count);
         if (status == -1) {
-            printf("Failed to delete the %s. Check for permissions!\n", de[idx].file_name);
+            printf("Error - Failed to delete the data of %s\n", de[idx].file_name);
             return -1;
         }
     } return 0;

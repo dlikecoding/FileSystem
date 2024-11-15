@@ -41,12 +41,12 @@
 #define CMDMV_ON	1
 #define CMDMD_ON	1
 #define CMDRM_ON	1
-#define CMDCP2L_ON	0
-#define CMDCP2FS_ON	0
+#define CMDCP2L_ON	1
+#define CMDCP2FS_ON	1
 #define CMDCD_ON	1
 #define CMDPWD_ON	1
-#define CMDTOUCH_ON	0
-#define CMDCAT_ON	0
+#define CMDTOUCH_ON	1
+#define CMDCAT_ON	1
 
 
 typedef struct dispatch_t
@@ -103,18 +103,18 @@ int displayFiles (fdDir * dirp, int flall, int fllong)
 	printf("\n");
 	while (di != NULL) 
 		{
-		if ((di->d_name[0] != '.') || (flall)) //if not all and starts with '.' it is hidden
-			{
-			if (fllong)
-				{
-				fs_stat (di->d_name, &statbuf);
-				printf ("%s    %9ld   %s\n", fs_isDir(di->d_name)?"D":"-", statbuf.st_size, di->d_name);
-				}
-			else
-				{
-				printf ("%s\n", di->d_name);
-				}
-			}
+		// if ((di->d_name[0] != '.') || (flall)) //if not all and starts with '.' it is hidden
+		// 	{
+		// 	if (fllong)
+		// 		{
+		// 		fs_stat (di->d_name, &statbuf);
+		// 		printf ("%s    %9ld   %s\n", fs_isDir(di->d_name)?"D":"-", statbuf.st_size, di->d_name);
+		// 		}
+		// 	else
+		// 		{
+		// 		printf ("%s\n", di->d_name);
+		// 		}
+		// 	}
 		di = fs_readdir (dirp);
 		}
 	fs_closedir (dirp);
@@ -363,9 +363,18 @@ int cmd_mv (int argcnt, char *argvec[])
 	{
 #if (CMDMV_ON == 1)				
 	for (size_t i = 0; i < vcb->fs_st.extentLength; i++){
-		printf("FS: [%d, %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
+		printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
 	}	
-	
+
+	printf("Name\t\tSize\tLBA\tUsed\tType\n");
+	for (size_t i = 0; i < 5; i++){
+		printf("%s\t\t%d\t%d\t%d\t%d\n", 
+		vcb->root_dir_ptr[i].file_name,
+		vcb->root_dir_ptr[i].file_size,
+		vcb->root_dir_ptr[i].extents->startLoc,
+		vcb->root_dir_ptr[i].is_used,
+		vcb->root_dir_ptr[i].is_directory);
+	}
 	return -99;
 	// **** TODO ****  For you to implement
 

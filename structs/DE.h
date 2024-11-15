@@ -50,6 +50,6 @@ int writeDirHelper(directory_entry *newDir);
 directory_entry* readDirHelper(int dirLoc);
 directory_entry* loadDir(directory_entry* directoryEntry);
 
-int releaseDeExtents(directory_entry *de, int idx);
+int removeDE(directory_entry *de, int idx);
 int sizeOfDE (directory_entry* de);
 #endif

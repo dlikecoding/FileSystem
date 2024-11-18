@@ -50,7 +50,7 @@ int deleteBlod(const char* pathname, int isDir) {
     }
 
     // Mark the target directory/file entry as unused in its parent metadata
-    int status = removeDE(parser.retParent, parser.index);
+    int status = removeDE(parser.retParent, parser.index, 0);
 
     // Update the parent directory on disk with the changes
     // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
@@ -397,71 +397,6 @@ int fs_closedir(fdDir *dirp) {
 
     return 0;
 }
-
-
-
-// fdDir *fs_opendir(const char *pathname) {
-//     parsepath_st parser = { NULL, -1, "" };
-    
-//     int isValid = parsePath(pathname, &parser);
-//     if (isValid != 0 || parser.retParent == NULL || !parser.retParent->is_directory) {
-//         printf("Error: no directory at %s\n", pathname);
-//         return NULL;
-//     }
-
-//     fdDir *dirp = (fdDir *)malloc(sizeof(fdDir));
-//     if (dirp == NULL) {
-//         printf("Error: fdDir malloc failed\n");
-//         return NULL;
-//     }
-
-//     dirp->d_reclen = sizeof(directory_entry);
-//     dirp->dirEntryPosition = 0;
-//     dirp->de = parser.retParent;
-//     dirp->di = NULL;
-
-//     return dirp;
-// }
-
-// struct fs_diriteminfo *fs_readdir(fdDir *dirp) {
-//     if (dirp == NULL || dirp->de == NULL || dirp->dirEntryPosition >= sizeOfDE(dirp->de)) {
-//         return NULL;
-//     }
-
-//     directory_entry *currentEntry = loadDir(&dirp->de[dirp->dirEntryPosition]);
-//     // Skip unused entries
-//     if (!currentEntry->is_used) {
-//         dirp->dirEntryPosition++;
-//         return fs_readdir(dirp);
-//     }
-
-//     // Allocate memory for fs_diriteminfo if needed
-//     if (dirp->di == NULL) {
-//         dirp->di = (struct fs_diriteminfo *)malloc(sizeof(struct fs_diriteminfo));
-//         if (dirp->di == NULL) {
-//             printf("Error: Memory allocation for fs_diriteminfo failed\n");
-//             return NULL;
-//         }
-//     }
-
-//     // Populate the fs_diriteminfo structure with data from the current entry
-//     dirp->di->d_reclen = dirp->d_reclen;
-//     dirp->di->fileType = currentEntry->is_directory ? 'D' : 'F';
-//     strncpy(dirp->di->d_name, currentEntry->file_name, 255);
-//     dirp->di->d_name[255] = '\0';  // Ensure null termination
-
-//     // Move to the next directory entry
-//     dirp->dirEntryPosition++;
-//     return dirp->di;
-// }
-
-// int fs_closedir(fdDir *dirp) {
-//     if (dirp == NULL) return -1;
-//     if (dirp->di != NULL) free(dirp->di);
-
-//     free(dirp);
-//     return 0;
-// }
 
 
 int fs_stat(const char *path, struct fs_stat *buf) {

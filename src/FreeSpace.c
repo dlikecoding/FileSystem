@@ -433,4 +433,5 @@ void returnExtents(extents_st returnExt) {
     for (size_t i = 0; i < returnExt.size ; i++) {
         releaseBlocks(returnExt.extents[i].startLoc, returnExt.extents[i].countBlock);
     }
+    freeExtents( &returnExt);
 }

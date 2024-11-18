@@ -45,7 +45,6 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
         
         // Return Blocks to Freespace on error
         returnExtents(blocksLoc);
-        freeExtents(&blocksLoc);
         return NULL;
     }
 
@@ -197,8 +196,8 @@ directory_entry* loadDir(directory_entry *de) {
 /** Remove directory entry and release all blocks associate with it
  * @return 0 on success, -1 on failure
  */
-int removeDE(directory_entry *de, int idx) {
-    de[idx].is_used = 0;
+int removeDE(directory_entry *de, int idx, int isUsed) {
+    de[idx].is_used = isUsed;
     de[idx].file_size = 0;
     
     // Remove file name if it's a directory
@@ -222,3 +221,4 @@ int removeDE(directory_entry *de, int idx) {
 int sizeOfDE (directory_entry* de) {
     return de[0].file_size / sizeof(directory_entry);
 }
+

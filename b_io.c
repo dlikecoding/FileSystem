@@ -210,8 +210,9 @@ int b_write (b_io_fd fd, char * buffer, int count)
 		fcbArray[fd].buflen = fcbArray[fd].numOfReqs * B_CHUNK_SIZE;
 	}
 	
-	printf("%s",buffer);
-	
+	printf("______buflen: %d | index: %d_______\n",fcbArray[fd].buflen,fcbArray[fd].index);
+	//fcbArray[fd].index += count;
+
 	int cpyToBuf = count;
 	while (cpyToBuf > 0) { 
 
@@ -228,16 +229,16 @@ int b_write (b_io_fd fd, char * buffer, int count)
 			printf("commited\ncpyToBuf: %d - remainInBuf: %d\n", cpyToBuf, remainInBuf);
 			
 			memcpy(fcbArray[fd].buf, buffer + cpyToBuf, cpyToBuf);
-			cpyToBuf -= cpyToBuf;
 			fcbArray[fd].index += cpyToBuf;
+			cpyToBuf -= cpyToBuf;
 
         } else {
 			printf("else\ncpyToBuf: %d - remainInBuf: %d\n", cpyToBuf, remainInBuf);
 			
 			memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, cpyToBuf);
 			
-			cpyToBuf -= cpyToBuf;
 			fcbArray[fd].index += cpyToBuf;
+			cpyToBuf -= cpyToBuf;
 		}
 		
 	}
@@ -364,7 +365,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 // Interface to Close the file	
 int b_close (b_io_fd fd)
 	{
-	printf("\n------ b_close: %d ------ \n", fcbArray[fd].index);
+	printf("\n------ b_close: %d ------ \n", fcbArray[fd].fi->file_size);
 	printf("%s", fcbArray[fd].buf);
 
 	if ( (fcbArray[fd].flags & O_RDONLY) == O_RDONLY ) {

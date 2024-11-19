@@ -425,13 +425,18 @@ int isOverlap(extent_st existExt, int addExtStart, int addExtCount) {
 //Free memory allocated for an extents_st
 void freeExtents(extents_st *reqBlocks) {
     if (reqBlocks && reqBlocks->extents) {
-        freePtr((void**) &reqBlocks->extents, "blocks allocate");
-    } reqBlocks->size = 0;
+        freePtr((void **) &reqBlocks->extents, "blocks allocate");
+        reqBlocks->extents = NULL;
+    }
+    if (reqBlocks) reqBlocks->size = 0;
 }
 
+// Release array of extents back to freespace map
 void returnExtents(extents_st returnExt) {
-    for (size_t i = 0; i < returnExt.size ; i++) {
+    if (returnExt.size == 0 || !returnExt.extents) return;
+
+    for (size_t i = 0; i < returnExt.size; i++) {
         releaseBlocks(returnExt.extents[i].startLoc, returnExt.extents[i].countBlock);
     }
-    freeExtents( &returnExt);
+    freeExtents(&returnExt);
 }

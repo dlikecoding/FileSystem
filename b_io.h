@@ -20,16 +20,18 @@
 
 typedef int b_io_fd;
 
+int writeBuffer(int count, b_io_fd fd, char* buffer);
+int readBuffer(int count, b_io_fd fd, char* buffer);
+int commitBlocks(b_io_fd fd);
+int findLBAOnDisk(extents_st exts, int idxLBA);
+int adjustBufferSize(b_io_fd fd);
+
+
 b_io_fd b_open (char * filename, int flags);
 int b_read (b_io_fd fd, char * buffer, int count);
 int b_write (b_io_fd fd, char * buffer, int count);
 int b_seek (b_io_fd fd, off_t offset, int whence);
 int b_close (b_io_fd fd);
 
-int writeBuffer(int count, b_io_fd fd, char* buffer);
-int readBuffer(int count, b_io_fd fd, char* buffer);
-int commitBlocks(b_io_fd fd);
-int findLBAOnDisk(extents_st exts, int idxLBA);
-int adjustBufferSize(b_io_fd fd);
 #endif
 

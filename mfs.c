@@ -18,110 +18,6 @@
 #include "mfs.h"
 
 
-/** The deleteBlod function deletes a file or directory at a specified path, 
- * ensuring file/directory exists, is the correct type, and is empty if it's a 
- * directory. It then releases any associated storage blocks and updates the 
- * parent directory's metadata.
- * @return 0 on success, -1 on failure
- * @author Danish Nguyen
-*/
-int deleteBlod(const char* pathname, int isDir) {
-    parsepath_st parser = { NULL, -1, "" };
-
-    if (parsePath(pathname, &parser) != 0) return -1;
-
-    if (parser.index == -1) {
-        printf("rm: %s: No such file or directory\n", parser.lastElement );
-        return -1; // Can not remove not exist dir
-    }
-
-    if (parser.retParent[parser.index].is_directory != isDir) return -1;
-
-    // If target is a directory, loaded to memory and check if it's empty
-    if (isDir) { // isDir <=> 1
-        directory_entry *removeDir = loadDir(&parser.retParent[parser.index]);
-        
-        // Ensure it can be loaded and is empty before deleting
-        if ( !removeDir || !isDirEmpty(removeDir)) {
-            printf("Cannot remove '%s': Is a directory and not empty\n", parser.retParent[parser.index].file_name);
-            return -1;
-        }
-        freePtr((void**) &removeDir, "Free rm dir");
-    }
-
-    // Mark the target directory/file entry as unused in its parent metadata
-    int status = removeDE(parser.retParent, parser.index, 0);
-
-    // Update the parent directory on disk with the changes
-    // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
-    // printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
-    return (status == -1) ? -1 : writeDirHelper(parser.retParent);
-}
-
-/** Deletes a file at a specified path
- * @return 0 on success, -1 on failure
- * @author Danish Nguyen
-*/
-int fs_delete(const char* filename) {
-    return deleteBlod(filename, 0);
-}
-
-/** Deletes a directory at a specified path, 
- * @return 0 on success, -1 on failure
- * @author Danish Nguyen
-*/
-int fs_rmdir(const char *pathname) {
-    return deleteBlod(pathname, 1);
-}
-
-/** Iterate through each entry in the directory and count entries that are 
- * marked as "is_used"
- * @return true (non-zero) if the directory contains only "." and ".." entries.
- * @author Danish Nguyen
-*/
-int isDirEmpty(directory_entry *de) {
-    int idx = 0;
-    for (size_t i = 0; i < sizeOfDE(de); i++) {
-        if (de[i].is_used) idx++;
-    }
-    return idx < 3;
-}
-
-/** Creates a new directory at the specified pathname with the given mode 
- * Validates the path, allocates a directory entry, updates directory metadata, and writes 
- * it back to disk.
- * @return 0 on success, -1 on failure
- * @author Danish Nguyen
- */
-int fs_mkdir(const char *pathname, mode_t mode) {
-    parsepath_st parser = { NULL, -1, "" };
-
-    /** The path must be valid, and last index must be -1
-     * indicating that there is no existing entry with the same name */
-    if (parsePath(pathname, &parser) != 0) return -1;
-    if ( parser.index != -1 ) {
-        printf("Error - mkdir: \"%s\": File exists \n", parser.retParent[parser.index].file_name);
-        return -1;
-    }
-    
-    directory_entry *newDir = createDirectory(DIRECTORY_ENTRIES, parser.retParent);
-    if (!newDir) return -1;
-
-    int deIdx = makeDirOrFile(parser, 1, newDir);
-    
-    // Nomore entry availible in parent directory
-    if (deIdx == -1) printf("Error - mkdir: Unable to create directory \n");
-
-    /** Frees memory allocated for the new directory once the operation is complete.
-        Writes the changes back to disk after updating. */
-    freePtr((void**) &newDir, "DE msf.c");
-
-    // printf(" *** fs_mkdir newDir: [%s] *** \n", parser.retParent[deIdx].file_name);
-    // printf(" *** fs_mkdir writeDirHelper: [%d] *** \n", parser.retParent->extents->startLoc);
-    
-    return (deIdx == -1) ? -1 : writeDirHelper(parser.retParent);
-}
-
 /** Parses a path string to find the directory and the last element name
  * @return 0 on success or -1 on failure
  * @anchor Danish Nguyen
@@ -210,6 +106,118 @@ void freeDirectory(directory_entry *dir) {
     freePtr((void**) &dir, "Directory Entry"); // Free the directory entry pointer
 }
 
+
+/** The deleteBlod function deletes a file or directory at a specified path, 
+ * ensuring file/directory exists, is the correct type, and is empty if it's a 
+ * directory. It then releases any associated storage blocks and updates the 
+ * parent directory's metadata.
+ * @return 0 on success, -1 on failure
+ * @author Danish Nguyen
+*/
+int deleteBlod(const char* pathname, int isDir) {
+    parsepath_st parser = { NULL, -1, "" };
+
+    if (parsePath(pathname, &parser) != 0) return -1;
+
+    if (parser.index == -1) {
+        printf("rm: %s: No such file or directory\n", parser.lastElement );
+        return -1; // Can not remove not exist dir
+    }
+
+    if (parser.retParent[parser.index].is_directory != isDir) return -1;
+
+    // If target is a directory, loaded to memory and check if it's empty
+    if (isDir) { // isDir <=> 1
+        directory_entry *removeDir = loadDir(&parser.retParent[parser.index]);
+        
+        // Ensure DE loaded and is empty before deleting
+        if ( !removeDir || !isDirEmpty(removeDir)) {
+            printf("Cannot remove '%s': Is a directory and not empty\n", parser.retParent[parser.index].file_name);
+            return -1;
+        }
+        
+        // // It's current working DE, can not be deleted
+        // if (strcmp(pathname, vcb->cwdStrPath) == 0){
+        //     printf("Cannot remove '%s': Current working directory\n", parser.retParent[parser.index].file_name);
+        //     return -1;
+        // }
+        freePtr((void**) &removeDir, "Free rm dir");
+    }
+
+    // Mark the target directory/file entry as unused in its parent metadata
+    int status = removeDE(parser.retParent, parser.index, 0);
+
+    // Update the parent directory on disk with the changes
+    // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
+    // printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
+    return (status == -1) ? -1 : writeDirHelper(parser.retParent);
+}
+
+/** Iterate through each entry in the directory and count entries that are 
+ * marked as "is_used"
+ * @return true (non-zero) if the directory contains only "." and ".." entries.
+ * @author Danish Nguyen
+*/
+int isDirEmpty(directory_entry *de) {
+    int idx = 0;
+    for (size_t i = 0; i < sizeOfDE(de); i++) {
+        if (de[i].is_used) idx++;
+    }
+    return idx < 3;
+}
+
+/** Deletes a file at a specified path
+ * @return 0 on success, -1 on failure
+ * @author Danish Nguyen
+*/
+int fs_delete(const char* filename) {
+    return deleteBlod(filename, 0);
+}
+
+/** Deletes a directory at a specified path, 
+ * @return 0 on success, -1 on failure
+ * @author Danish Nguyen
+*/
+int fs_rmdir(const char *pathname) {
+    return deleteBlod(pathname, 1);
+}
+
+/** Creates a new directory at the specified pathname with the given mode 
+ * Validates the path, allocates a directory entry, updates directory metadata, and writes 
+ * it back to disk.
+ * @return 0 on success, -1 on failure
+ * @author Danish Nguyen
+ */
+int fs_mkdir(const char *pathname, mode_t mode) {
+    parsepath_st parser = { NULL, -1, "" };
+
+    /** The path must be valid, and last index must be -1
+     * indicating that there is no existing entry with the same name */
+    if (parsePath(pathname, &parser) != 0) return -1;
+    if ( parser.index != -1 ) {
+        printf("Error - mkdir: \"%s\": File exists \n", parser.retParent[parser.index].file_name);
+        return -1;
+    }
+    
+    directory_entry *newDir = createDirectory(DIRECTORY_ENTRIES, parser.retParent);
+    if (!newDir) return -1;
+
+    int deIdx = makeDirOrFile(parser, 1, newDir);
+    
+    // Nomore entry availible in parent directory
+    if (deIdx == -1) printf("Error - mkdir: Unable to create directory \n");
+
+    /** Frees memory allocated for the new directory once the operation is complete.
+        Writes the changes back to disk after updating. */
+    freePtr((void**) &newDir, "DE msf.c");
+
+    // printf(" *** fs_mkdir newDir: [%s] *** \n", parser.retParent[deIdx].file_name);
+    // printf(" *** fs_mkdir writeDirHelper: [%d] *** \n", parser.retParent->extents->startLoc);
+    
+    return (deIdx == -1) ? -1 : writeDirHelper(parser.retParent);
+}
+
+
 /** Get current working directory
  * @returns the current working directory as a string in pathname
  * @anchor Danish Nguyen
@@ -283,9 +291,8 @@ char* cleanPath(const char* srcPath) {
     int curIdx = 0;  // Index of each DE's name in provied path
     
     // duplicate the path for tokenization
-    char pathCopy[MAX_PATH_LENGTH];
-    memset(pathCopy, 0, MAX_PATH_LENGTH);
-
+    char *pathCopy = (char*) calloc( sizeof(char), MAX_PATH_LENGTH);
+    
     // Start with "/" for absolute paths or current working path
     if (srcPath[0] != '/') {
         strcpy(pathCopy, vcb->cwdStrPath);
@@ -294,6 +301,9 @@ char* cleanPath(const char* srcPath) {
         strncpy(pathCopy, srcPath, (MAX_PATH_LENGTH - 1) );
     }
     
+    // Reduce memory for path string
+    pathCopy = realloc(pathCopy, strlen(pathCopy));
+
     char *savePtr;
     char *token = strtok_r(pathCopy, "/", &savePtr); // Tokenize the path by '/'
     
@@ -312,7 +322,10 @@ char* cleanPath(const char* srcPath) {
     
     // Concatenate all tokens into a string
     char *newStrPath = malloc(MAX_PATH_LENGTH);
-    if(newStrPath == NULL) return NULL;
+    if(newStrPath == NULL) {
+        freePtr((void**) &pathCopy, "cleanPath - pathCopy");
+        return NULL;
+    }
    
     strcpy(newStrPath, "/");
 
@@ -320,6 +333,8 @@ char* cleanPath(const char* srcPath) {
         strcat(newStrPath, tokens[i]);
         strcat(newStrPath, "/");  // add "/" between directories
     }
+
+    freePtr((void**) &pathCopy, "cleanPath - pathCopy");
     return newStrPath;
 }
 

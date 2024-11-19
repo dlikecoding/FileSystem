@@ -91,7 +91,7 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
         freePtr((void**) &newDir, "DE DE.c");
         return NULL;
     }
-    printf(" *** Successfully created DE - LBA @ %d *** \n ", newDir->extents[0].startLoc);
+    printf(" *** Successfully created DE - LBA @ %d *** \n", newDir->extents[0].startLoc);
 
     return newDir;
 }

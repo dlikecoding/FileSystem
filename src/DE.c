@@ -195,6 +195,7 @@ directory_entry* loadDir(directory_entry *de) {
 
 /** Remove directory entry and release all blocks associate with it
  * @return 0 on success, -1 on failure
+ * @anchor Danish Nguyen
  */
 int removeDE(directory_entry *de, int idx, int isUsed) {
     de[idx].is_used = isUsed;
@@ -213,7 +214,10 @@ int removeDE(directory_entry *de, int idx, int isUsed) {
             printf("Error - Failed to delete the data of %s\n", de[idx].file_name);
             return -1;
         }
-    } return 0;
+    } 
+    de[idx].ext_length = 0;
+
+    return 0;
 }
 
 

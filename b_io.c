@@ -151,7 +151,7 @@ b_io_fd b_open (char * filename, int flags)
 
 	// fcbArray[returnFd].curWriteIdx = 0;
 
-	fcbArray[returnFd].wExt = (extents_st) {NULL, 0};
+	// fcbArray[returnFd].wExt = (extents_st) {NULL, 0};
 
 	// Allocate and initial memory base on number of blocks
 	fcbArray[returnFd].buf = (char*) malloc (B_CHUNK_SIZE);
@@ -191,7 +191,7 @@ int b_write (b_io_fd fd, char * buffer, int count)
     if ((fcbArray[fd].flags & O_WRONLY) != O_WRONLY) return -1;
     
     // Allocate free space on disk and make sure the disk has enough space.
-    if (!fcbArray[fd].wExt.size) {
+    if (!fcbArray[fd].fi->file_size) {
 		fcbArray[fd].wExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
 
 		if (!fcbArray[fd].wExt.size) {

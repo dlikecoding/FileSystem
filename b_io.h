@@ -22,9 +22,9 @@ typedef int b_io_fd;
 
 int writeBuffer(int count, b_io_fd fd, char* buffer);
 int readBuffer(int count, b_io_fd fd, char* buffer);
-int commitBlocks(b_io_fd fd);
-int findLBAOnDisk(extents_st exts, int idxLBA);
-int adjustBufferSize(b_io_fd fd);
+int commitBlocks(b_io_fd fd, int nBlocks);
+int findLBAOnDisk(b_io_fd fd, int idxLBA);
+int allocateFSBlocks(b_io_fd fd);
 
 
 b_io_fd b_open (char * filename, int flags);

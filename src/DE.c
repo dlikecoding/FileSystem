@@ -101,7 +101,7 @@ directory_entry *createDirectory(int numEntries, directory_entry *parent) {
  * @author Danish Nguyen, Atharva Walawalkar
  */
 int writeDirHelper(directory_entry *newDir) {
-    
+
     // if directory entries have continuous blocks
     if (newDir[0].ext_length == 1) {
         

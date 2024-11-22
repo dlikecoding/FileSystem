@@ -85,7 +85,7 @@ int parsePath(const char *path, parsepath_st* parser) {
  * @anchor Danish Nguyen
  */ 
 int findInDir(directory_entry *de, char *name) {
-    if (de == NULL || name == NULL) return -2; // Invalid input
+    if (!de || name) return -2; // Invalid input
     
     for (int i = 0; i < sizeOfDE(de); i++) {
         if (de[i].is_used) {

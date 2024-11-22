@@ -4,6 +4,7 @@
         "mfs.h": "c",
         "dirent.h": "c",
         "typeinfo": "c",
-        "compare": "c"
+        "compare": "c",
+        "fcntl.h": "c"
     }
 }

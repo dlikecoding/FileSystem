@@ -21,12 +21,12 @@
 #include <fcntl.h>
 #include "b_io.h"
 
-#include "mfs.h"
+
 
 #define MAXFCBS 20
 #define B_CHUNK_SIZE 512
 
-#define N_BLOCKS 100
+#define N_BLOCKS 10
 
 typedef struct b_fcb
 	{
@@ -38,15 +38,16 @@ typedef struct b_fcb
 	int curBlockIdx; // Tracks the current Block have read to bufferData 
 
 	int nBlocks;  // Number of blocks allocate on disk - need to update on average file size
-	int flags;
+	int flags;		
+
+	int parentIdx; // parent DE's index
 
     char* buf;		//holds the open file buffer
 
 
 	extents_st wExt;// holds extents of blocks locations 
 
-    directory_entry* fi; // file infor
-	directory_entry* parent; // DE parent
+    directory_entry* fi; // holds infor of DE (file) 
 
 	} b_fcb;
 	
@@ -125,16 +126,16 @@ b_io_fd b_open (char * filename, int flags)
 	
 	if (parser.index == -1) return -1;
 	
-	//Save parent
-	fcbArray[returnFd].parent = parser.retParent;
+	// Store parent DE's index in fcb struct
+	fcbArray[returnFd].parentIdx = parser.index;
 
-	// Store valid DE into file info
+	// Store valid DE as file info
 	fcbArray[returnFd].fi = &parser.retParent[parser.index];
 	if (fcbArray[returnFd].fi == NULL) return -1;
 
-    // if O_TRUNC, delete all the blocks associate with that file
-    if (flags & O_TRUNC) {
-		int status = removeDE(fcbArray[returnFd].fi, parser.index, 1);
+    // if O_TRUNC, and the file holds blocks, delete all the blocks associate with that file
+    if ( (flags & O_TRUNC) ) {
+		int status = removeDE(parser.retParent, parser.index, 1);
 		if (status == -1) return -1;
     }
 
@@ -148,10 +149,6 @@ b_io_fd b_open (char * filename, int flags)
 
 	fcbArray[returnFd].nBlocks = N_BLOCKS;
 	fcbArray[returnFd].buflen = fcbArray[returnFd].nBlocks * B_CHUNK_SIZE;
-
-	// fcbArray[returnFd].curWriteIdx = 0;
-
-	// fcbArray[returnFd].wExt = (extents_st) {NULL, 0};
 
 	// Allocate and initial memory base on number of blocks
 	fcbArray[returnFd].buf = (char*) malloc (B_CHUNK_SIZE);
@@ -186,22 +183,23 @@ int b_write (b_io_fd fd, char * buffer, int count)
 		{
 		return (-1); 					//invalid file descriptor
 		}
-	///////////////////////////////////////////////////////////////
-    // File is opened in write-only mode
+	
+	// File is opened in write-only mode
     if ((fcbArray[fd].flags & O_WRONLY) != O_WRONLY) return -1;
     
     // Allocate free space on disk and make sure the disk has enough space.
     if (!fcbArray[fd].fi->file_size) {
-		fcbArray[fd].wExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
+		extents_st fileExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
 
-		if (!fcbArray[fd].wExt.size) {
+		if (!fileExt.size || !fileExt.extents) {
 			printf("Not enough space on disk\n");
 			return -1;
 		}
 
-		memcpy(fcbArray[fd].fi->extents, fcbArray[fd].wExt.extents, fcbArray[fd].wExt.size * sizeof(extent_st));
-        fcbArray[fd].fi->ext_length = fcbArray[fd].wExt.size;
+		memcpy(fcbArray[fd].fi->extents, fileExt.extents, fileExt.size * sizeof(extent_st));
+        fcbArray[fd].fi->ext_length = fileExt.size;
 		
+		freeExtents(&fileExt);
 		// printf(" Allocated: [%d: %d]\n", fcbArray[fd].wExt.extents->startLoc, fcbArray[fd].wExt.extents->countBlock);		
 	}
 
@@ -210,18 +208,17 @@ int b_write (b_io_fd fd, char * buffer, int count)
 	}
 
 
-
 int writeBuffer(int count, b_io_fd fd, char *buffer) {
 	
 	// An offset for tracking # of bytes has been written from caller's buffer
 	int callerBufPos = 0;
 
 	while (count > 0) {
-		int bufferPos = fcbArray[fd].fi->file_size % B_CHUNK_SIZE; // Data has been read in a block
-		int remainInBlock = B_CHUNK_SIZE - bufferPos; // Remaining bytes in the current block
+		int bufferPos = fcbArray[fd].fi->file_size % B_CHUNK_SIZE; // cursor in fcb buffer
+		int remainFCBBuffer = B_CHUNK_SIZE - bufferPos; // Remaining bytes in the current fcb buffer
 		
 		// count exceeds chunk size and a full block of data is avalible to write
-		if ( (count > B_CHUNK_SIZE) && (remainInBlock == B_CHUNK_SIZE) ) {
+		if ( (count > B_CHUNK_SIZE) && (remainFCBBuffer == B_CHUNK_SIZE) ) {
 			// To calculates how many full blocks to write to disk
 			int numBlocks = (count / B_CHUNK_SIZE);
 
@@ -246,19 +243,18 @@ int writeBuffer(int count, b_io_fd fd, char *buffer) {
 
 		/* count is greater than or equal data left in the current block, transfer the 
 		remaining data in current block and update index, LBAPos and caller' buffer position */
-		if (count > remainInBlock) {
-			memcpy(fcbArray[fd].buf + bufferPos, buffer + callerBufPos, remainInBlock);
+		if (count > remainFCBBuffer) {
+			memcpy(fcbArray[fd].buf + bufferPos, buffer + callerBufPos, remainFCBBuffer);
 			
 			int cStatus = commitBlocks(fd, 1);
 			
-
 			// Check if has enough blocks in freespace before commit
 			// Commit one block from caller's buffer to disk. LBAwrite one extent
 
-			fcbArray[fd].fi->file_size += remainInBlock;
-			count -= remainInBlock;
+			fcbArray[fd].fi->file_size += remainFCBBuffer;
+			count -= remainFCBBuffer;
 
-			callerBufPos += remainInBlock;
+			callerBufPos += remainFCBBuffer;
 			continue;
 		}
 		
@@ -280,7 +276,8 @@ int commitBlocks(b_io_fd fd, int nBlocks){
 	// Check number of blocks needed to write data to disk not enough, allocate more block
 	if ( (fcbArray[fd].curLBAPos + nBlocks) > (fcbArray[fd].nBlocks - 1)) {
 		if ( allocateFSBlocks(fd) == -1 ) return -1;
-	}
+	} // [31:100]
+	printf("\n*************allocateFSBlocks ****************\n");
 	
 	// Find actual LBA index on disk
 	int foundLBAIdx = findLBAOnDisk(fd, fcbArray[fd].curLBAPos);
@@ -293,32 +290,74 @@ int commitBlocks(b_io_fd fd, int nBlocks){
 	fcbArray[fd].curLBAPos += nBlocks; // Update number of blocks written to disk
 	memset(fcbArray[fd].buf, 0, B_CHUNK_SIZE);
 	// printf("Buff len: %ld \n", strlen(fcbArray[fd].buf));
+	
 	return 0;
 }
 
 // resize fd.buffer and clean old buffer. 
 int allocateFSBlocks(b_io_fd fd){
 
-	freeExtents(&fcbArray[fd].wExt);
-
-	fcbArray[fd].wExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
-	if (!fcbArray[fd].wExt.size) {
-		printf("Not enough space on disk\n");
-		return -1;
-	}
-	// printf(" Allocated: [%d: %d]\n", fcbArray[fd].wExt.extents->startLoc, fcbArray[fd].wExt.extents->countBlock);
-
-
 	// Update nBlock value
 	fcbArray[fd].index = 0; // Reset fd.index
 	fcbArray[fd].nBlocks *= 2; // Double size number of blocks request
+
+	extents_st fileExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
+	if (!fileExt.size) {
+		printf("Not enough space on disk\n");
+		return -1;
+	}
 	
+	// Add allocated extents to the current extent in file info
+	// Can only merge at the last index of array's extent for files
+	int lastIdx = fcbArray[fd].fi->ext_length - 1;
+	printf("\n************* lastIdx: %d ****************\n", lastIdx);
+	int lastExtStart = fcbArray[fd].fi->extents[lastIdx].startLoc;
+	int lastExtCount = fcbArray[fd].fi->extents[lastIdx].countBlock;
+	
+
+	printf("\n************* lastExtStart: %d | lastExtCount: %d ****************\n", 
+			lastExtStart, lastExtCount);
+	
+	int index = 1;
+	for (size_t i = 0; i < fileExt.size; i++) {
+		int start = fileExt.extents[i].startLoc;
+		int count = fileExt.extents[i].countBlock;
+
+		// Merge last extent in file if possible
+		if (lastExtStart + lastExtCount == start) {
+			fcbArray[fd].fi->extents[lastIdx].countBlock += count;
+			
+			////////////////////////////////////////////////////////////
+			// Need to check on what index need to skip
+			continue;
+		}
+
+		// otherwise, set the next extent equals to the new extents allocated
+		fcbArray[fd].fi->extents[lastIdx + index].startLoc = fileExt.extents[i].startLoc;
+		fcbArray[fd].fi->extents[lastIdx + index].countBlock = fileExt.extents[i].countBlock;
+		index++;
+	}
+	
+	fcbArray[fd].fi->ext_length += fileExt.size;
+
+	printf(" Allocated: [%d: %d]\n", fcbArray[fd].wExt.extents->startLoc, fcbArray[fd].wExt.extents->countBlock);
+
+	freeExtents(&fileExt);
 	return 0;
 }
 
+/**  */
+int releaseUnusedBlocks(b_io_fd fd) {
+	// | 19 | 3 |   | 32 | 9 |
+	// | 14 | 2 |	| 20 | 6 |
+	// | 26 | 6 |
+	int blocksUsed = computeBlockNeeded(fcbArray[fd].fi->file_size, B_CHUNK_SIZE);
+	
+}	
 
 /** Find the actual LBA on disk base on the index
- * @return int actual LBA on success, -1 on error 
+ * @return int actual LBA on success, -1 on error
+ * @author Danish Nguyen
  */
 int findLBAOnDisk(b_io_fd fd, int idxLBA) {
     for (int i = 0; i < fcbArray[fd].fi->ext_length; ++i) {
@@ -343,13 +382,13 @@ int b_close (b_io_fd fd)
 	if ( (fcbArray[fd].flags & O_WRONLY) == O_WRONLY ) {
 		if (strlen(fcbArray[fd].buf) > 0) {
 			if (commitBlocks(fd, 1) == -1) return -1;
-			if (writeDirHelper(fcbArray[fd].parent) == -1) return -1;
+			if (writeDirHelper(fcbArray[fd].fi - fcbArray[fd].parentIdx) == -1) return -1;
 		}
 	}
 	printf("\n------ b_close: %d ------ \n", fcbArray[fd].fi->file_size);
 	
 
-	freeExtents(&fcbArray[fd].wExt);
+	// freeExtents(&fcbArray[fd].wExt);
 	freePtr((void**) &fcbArray[fd].buf, "FCB buffer");
 	return 0;
 	}
@@ -430,16 +469,6 @@ int b_read (b_io_fd fd, char * buffer, int count)
 
 	// Track bytes to transfer based on available data in the file
 	int transferred = (readBytes > count) ? count : readBytes;
-	
-	// if (fcbArray[fd].wExt.size == 0) {
-	// 	fcbArray[fd].wExt.size = fcbArray[fd].fi->ext_length;
-	// 	fcbArray[fd].wExt.extents = fcbArray[fd].fi->extents;
-	
-	// }
-	// printf("Extent length: [%d]\n", fcbArray[fd].fi->ext_length);
-	// for (size_t i = 0; i < fcbArray[fd].fi->ext_length; i++) {
-	// 	printf("Extent: [%d:%d]\n", fcbArray[fd].fi->extents->startLoc, fcbArray[fd].fi->extents->countBlock);
-	// }
 	
 	int status = readBuffer(transferred, fd, buffer);
 
@@ -565,7 +594,7 @@ int readBuffer(int transferByte, b_io_fd fd, char *buffer) {
 // 		// if (fcbArray[fd].curBlockIdx != fcbArray[fd].curLBAPos)
 // 		// if (transferByte >= remainInBlock)
 
-//         int remainInBuf = B_CHUNK_SIZE - fcbArray[fd].index;
+//  int remainInBuf = B_CHUNK_SIZE - fcbArray[fd].index;
 
 // 		// if (cpyToBuf > B_CHUNK_SIZE) {
 // 		// 	// if buffer empty, copy everthing to buffer

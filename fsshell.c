@@ -366,15 +366,25 @@ int cmd_mv (int argcnt, char *argvec[])
 		printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
 	}	
 
-	printf("Name\t\tSize\tLBA\tUsed\tType\n");
+	printf("Name\tSize\tLBA\tUsed\tType\tExt\n");
 	for (size_t i = 0; i < 5; i++){
-		printf("%s\t\t%d\t%d\t%d\t%d\n", 
+		printf("%s\t%d\t%d\t%d\t%d\t%d\n", 
 		vcb->root_dir_ptr[i].file_name,
 		vcb->root_dir_ptr[i].file_size,
 		vcb->root_dir_ptr[i].extents->startLoc,
 		vcb->root_dir_ptr[i].is_used,
-		vcb->root_dir_ptr[i].is_directory);
+		vcb->root_dir_ptr[i].is_directory,
+		vcb->root_dir_ptr[i].ext_length);
+
+		if (!vcb->root_dir_ptr[i].ext_length) {
+			for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
+				printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
+			}
+			printf("\n");
+		}
 	}
+
+
 	return -99;
 	// **** TODO ****  For you to implement
 

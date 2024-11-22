@@ -204,6 +204,9 @@ int removeDE(directory_entry *de, int idx, int isUsed) {
     // Remove file name if it's a directory
     if (de[idx].is_directory) de[idx].file_name[0] = '\0';
     
+    // The DE holds any blocks remove it. Otherwise, return success
+    if (de[idx].ext_length == 0) return 0;
+    
     for (size_t i = 0; i < de[idx].ext_length ; i++) {
         int start = de[idx].extents[i].startLoc;
         int count = de[idx].extents[i].countBlock;
@@ -214,7 +217,7 @@ int removeDE(directory_entry *de, int idx, int isUsed) {
             printf("Error - Failed to delete the data of %s\n", de[idx].file_name);
             return -1;
         }
-    } 
+    }
     de[idx].ext_length = 0;
 
     return 0;

@@ -202,7 +202,7 @@ int removeDE(directory_entry *de, int idx, int isUsed) {
     de[idx].file_size = 0;
     
     // Remove file name if it's a directory
-    if (de[idx].is_directory) de[idx].file_name[0] = '\0';
+    // if (de[idx].is_directory) de[idx].file_name[0] = '\0';
     
     // The DE holds any blocks remove it. Otherwise, return success
     if (de[idx].ext_length == 0) return 0;
@@ -219,7 +219,7 @@ int removeDE(directory_entry *de, int idx, int isUsed) {
         }
     }
     de[idx].ext_length = 0;
-
+    
     return 0;
 }
 

@@ -25,7 +25,5 @@ int min(int a, int b);
 
 void freePtr(void** ptr, const char* type);
 
-
-
 #endif
 

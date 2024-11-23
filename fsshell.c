@@ -1,9 +1,9 @@
 /**************************************************************
-* Class::  CSC-415-0# Spring 2024
-* Name::
-* Student IDs::
-* GitHub-Name::
-* Group-Name::
+* Class::  CSC-415-03 FALL 2024
+* Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
+* Student IDs:: 923091933, 924254653, 922810925, 918157791
+* GitHub-Name:: dlikecoding
+* Group-Name:: 0xAACD
 * Project:: Basic File System
 *
 * File:: fsShell.c
@@ -32,12 +32,12 @@
 
 #define SINGLE_QUOTE	0x27
 #define DOUBLE_QUOTE	0x22
-#define BUFFERLEN		200
+#define BUFFERLEN		20000
 #define DIRMAX_LEN		4096
 
 /****   SET THESE TO 1 WHEN READY TO TEST THAT COMMAND ****/
 #define CMDLS_ON	1
-#define CMDCP_ON	0
+#define CMDCP_ON	1
 #define CMDMV_ON	1
 #define CMDMD_ON	1
 #define CMDRM_ON	1
@@ -100,7 +100,7 @@ int displayFiles (fdDir * dirp, int flall, int fllong)
 	struct fs_stat statbuf;
 	
 	di = fs_readdir (dirp);
-	printf("\n");
+	// printf("\n");
 	while (di != NULL) 
 		{
 		// if ((di->d_name[0] != '.') || (flall)) //if not all and starts with '.' it is hidden
@@ -304,6 +304,7 @@ int cmd_cat (int argcnt, char *argvec[])
                 printf("%s", buf);
                 } while (readcnt == BUFFERLEN-1);
         b_close (testfs_src_fd);
+		printf("\n");
 #endif
         return 0;
         }
@@ -366,22 +367,24 @@ int cmd_mv (int argcnt, char *argvec[])
 		printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
 	}	
 
-	printf("Name\tSize\tLBA\tUsed\tType\tExt\n");
-	for (size_t i = 0; i < 5; i++){
-		printf("%s\t%d\t%d\t%d\t%d\t%d\n", 
-		vcb->root_dir_ptr[i].file_name,
-		vcb->root_dir_ptr[i].file_size,
-		vcb->root_dir_ptr[i].extents->startLoc,
-		vcb->root_dir_ptr[i].is_used,
-		vcb->root_dir_ptr[i].is_directory,
-		vcb->root_dir_ptr[i].ext_length);
+	printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
+    for (size_t i = 0; i < 5; i++){
 
-		if (!vcb->root_dir_ptr[i].ext_length) {
-			for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
-				printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
-			}
-			printf("\n");
-		}
+		 printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+            vcb->root_dir_ptr[i].file_name,
+            vcb->root_dir_ptr[i].file_size,
+            vcb->root_dir_ptr[i].extents->startLoc,
+            vcb->root_dir_ptr[i].is_used,
+            vcb->root_dir_ptr[i].is_directory,
+            vcb->root_dir_ptr[i].ext_length,
+            vcb->root_dir_ptr[i].extents->countBlock);
+
+		// if (!vcb->root_dir_ptr[i].ext_length) {
+		// 	for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
+		// 		printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
+		// 	}
+		// 	printf("\n");
+		// }
 	}
 
 

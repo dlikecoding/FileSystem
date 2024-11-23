@@ -17,7 +17,6 @@
 
 #include "mfs.h"
 
-
 /** Parses a path string to find the directory and the last element name
  * @return 0 on success or -1 on failure
  * @anchor Danish Nguyen
@@ -85,7 +84,7 @@ int parsePath(const char *path, parsepath_st* parser) {
  * @anchor Danish Nguyen
  */ 
 int findInDir(directory_entry *de, char *name) {
-    if (!de || name) return -2; // Invalid input
+    if (de == NULL || name == NULL) return -2; // Invalid input
     
     for (int i = 0; i < sizeOfDE(de); i++) {
         if (de[i].is_used) {
@@ -272,12 +271,8 @@ int fs_setcwd(char *pathname) {
     if (!vcb->cwdStrPath) return -1;
 
     freePtr((void**) &oldStrPath, "CWD Str Path");
-
-    // if ( writeDirHelper(parser.retParent) == -1) return -1;
-    // printf("writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
-
-    printf(">>> %s\n", vcb->cwdStrPath);
     
+    printf(">>> %s\n", vcb->cwdStrPath);
     return 0;
 }
 
@@ -338,7 +333,6 @@ char* cleanPath(const char* srcPath) {
     return newStrPath;
 }
 
-/////////////////////////////////////////////////////////////////////////////
 fdDir* fs_opendir(const char *pathname) {
     parsepath_st parser = { NULL, -1, "" };
 
@@ -352,7 +346,6 @@ fdDir* fs_opendir(const char *pathname) {
     fdDir* dirp = malloc(sizeof(fdDir));
     if (dirp == NULL) return NULL;
 
-    ////////////////////////////////////////////////
     dirp->d_reclen = 0;
     dirp->dirEntryPosition = 0;
     
@@ -361,7 +354,7 @@ fdDir* fs_opendir(const char *pathname) {
 
     dirp->di = malloc(sizeof(struct fs_diriteminfo));
     if (dirp->di == NULL) return NULL;
-    
+    printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
     return dirp;
 }
 
@@ -370,22 +363,18 @@ struct fs_diriteminfo* fs_readdir(fdDir* dirp) {
     
     if (dirp == NULL || dirp->de == NULL || !dirp->de->is_used) {
         return NULL;
-    }
-
+    }    
     // If the last DE has been reached
     if (dirp->dirEntryPosition >= sizeOfDE(dirp->de) - 1) return NULL;
-    // printf(" name: %s\t%d\t%d\t%d\t%ld\t%d\n", 
-    //         dirp->de->file_name, dirp->de->file_size,
-    //         dirp->de->extents->startLoc, dirp->de->extents->countBlock,
-    //         dirp->de->creation_time, dirp->de->is_used);
 
-    printf("%3d %3d %3d %6d %-12ld %s\n", 
-           dirp->de->ext_length,
-           dirp->de->is_directory,
-           dirp->de->is_used,
-           dirp->de->file_size, 
-           dirp->de->creation_time, 
-           dirp->de->file_name);
+    printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+            dirp->de->file_name,
+            dirp->de->file_size,
+            dirp->de->extents->startLoc,
+            dirp->de->is_used,
+            dirp->de->is_directory,
+            dirp->de->ext_length,
+            dirp->de->extents->countBlock);
 
     // Populate fs_diriteminfo
     // dirp->di->d_reclen = sizeof(struct fs_diriteminfo);

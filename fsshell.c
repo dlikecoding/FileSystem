@@ -32,7 +32,7 @@
 
 #define SINGLE_QUOTE	0x27
 #define DOUBLE_QUOTE	0x22
-#define BUFFERLEN		20000
+#define BUFFERLEN		2000
 #define DIRMAX_LEN		4096
 
 /****   SET THESE TO 1 WHEN READY TO TEST THAT COMMAND ****/
@@ -103,18 +103,18 @@ int displayFiles (fdDir * dirp, int flall, int fllong)
 	// printf("\n");
 	while (di != NULL) 
 		{
-		// if ((di->d_name[0] != '.') || (flall)) //if not all and starts with '.' it is hidden
-		// 	{
-		// 	if (fllong)
-		// 		{
-		// 		fs_stat (di->d_name, &statbuf);
-		// 		printf ("%s    %9ld   %s\n", fs_isDir(di->d_name)?"D":"-", statbuf.st_size, di->d_name);
-		// 		}
-		// 	else
-		// 		{
-		// 		printf ("%s\n", di->d_name);
-		// 		}
-		// 	}
+		if ((di->d_name[0] != '.') || (flall)) //if not all and starts with '.' it is hidden
+			{
+			if (fllong)
+				{
+				fs_stat (di->d_name, &statbuf);
+				printf ("%s    %9ld   %s\n", fs_isDir(di->d_name)?"D":"-", statbuf.st_size, di->d_name);
+				}
+			else
+				{
+				printf ("%s\n", di->d_name);
+				}
+			}
 		di = fs_readdir (dirp);
 		}
 	fs_closedir (dirp);
@@ -363,32 +363,56 @@ int cmd_cp (int argcnt, char *argvec[])
 int cmd_mv (int argcnt, char *argvec[])
 	{
 #if (CMDMV_ON == 1)				
-	for (size_t i = 0; i < vcb->fs_st.extentLength; i++){
-		printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
-	}	
+	// for (size_t i = 0; i < vcb->fs_st.extentLength; i++){
+	// 	printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
+	// }	
 
-	printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
-    for (size_t i = 0; i < 5; i++){
+	// printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
+    // for (size_t i = 0; i < 5; i++){
 
-		 printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
-            vcb->root_dir_ptr[i].file_name,
-            vcb->root_dir_ptr[i].file_size,
-            vcb->root_dir_ptr[i].extents->startLoc,
-            vcb->root_dir_ptr[i].is_used,
-            vcb->root_dir_ptr[i].is_directory,
-            vcb->root_dir_ptr[i].ext_length,
-            vcb->root_dir_ptr[i].extents->countBlock);
+	// 	 printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+    //         vcb->root_dir_ptr[i].file_name,
+    //         vcb->root_dir_ptr[i].file_size,
+    //         vcb->root_dir_ptr[i].extents->startLoc,
+    //         vcb->root_dir_ptr[i].is_used,
+    //         vcb->root_dir_ptr[i].is_directory,
+    //         vcb->root_dir_ptr[i].ext_length,
+    //         vcb->root_dir_ptr[i].extents->countBlock);
 
-		// if (!vcb->root_dir_ptr[i].ext_length) {
-		// 	for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
-		// 		printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
-		// 	}
-		// 	printf("\n");
-		// }
-	}
+	// 	// if (!vcb->root_dir_ptr[i].ext_length) {
+	// 	// 	for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
+	// 	// 		printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
+	// 	// 	}
+	// 	// 	printf("\n");
+	// 	// }
+	// }
 
+	char *src;
+    char *dest;
 
-	return -99;
+    switch (argcnt) {
+        case 3:
+            src = argvec[1];
+            dest = argvec[2];
+            break;
+
+        default:
+            printf("Usage: mv [srcfile] [destfile]\n");
+            return -1;
+    }
+
+    if (cmd_cp(3, argvec) != 0) {
+        printf("Error - Failed to copy '%s' to '%s'.\n", src, dest);
+        return -1;
+    }
+
+    // Remove the source file after successful copy
+    char *rm_args[] = {"rm", src};
+    if (cmd_rm(2, rm_args) != 0) {
+        printf("Error - Failed to remove source file '%s' after copying \n", src);
+        return -1;
+    }
+    return 0;
 	// **** TODO ****  For you to implement
 
 #endif
@@ -524,7 +548,11 @@ int cmd_cp2fs (int argcnt, char *argvec[])
 	do 
 		{
 		readcnt = read (linux_fd, buf, BUFFERLEN);
+		
+		// Return -1 if file name is not specify
+		if (testfs_fd == -1) return -1;
 		b_write (testfs_fd, buf, readcnt);
+		
 		} while (readcnt == BUFFERLEN);
 	b_close (testfs_fd);
 	close (linux_fd);

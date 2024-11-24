@@ -17,7 +17,10 @@
 
 #include "mfs.h"
 
-/** Parses a path string to find the directory and the last element name
+/**
+ * Parses a path string to extract parent directory and last element's name
+ * returns a pointer to the parent directory, the last element (file or directory name), 
+ * and the index of the last element within the path.
  * @return 0 on success or -1 on failure
  * @anchor Danish Nguyen
  */
@@ -56,7 +59,7 @@ int parsePath(const char *path, parsepath_st* parser) {
             return 0;
         }
 
-        // Path component not found Or Not a directory
+        // Path component not found or not a directory
         if ( (idx == -1) || (!parent[idx].is_directory) ) {
             freePtr( (void**) &pathCopy, "pathCopy");
             return -1;
@@ -67,7 +70,7 @@ int parsePath(const char *path, parsepath_st* parser) {
         if (newParent == NULL) {
             freePtr( (void**) &pathCopy, "pathCopy");
             return -1; // Loading directory failed
-        } 
+        }
         
         // Selectively free the current parent if it's not root or CWD DE
         freeDirectory(parent);
@@ -147,8 +150,6 @@ int deleteBlod(const char* pathname, int isDir) {
     int status = removeDE(parser.retParent, parser.index, 0);
 
     // Update the parent directory on disk with the changes
-    // printf("rmdir - writeDirHelper: loc %d\n", parser.retParent->extents->startLoc);
-    // printf("Deleted %s: %s successfuly!\n", (isDir)? "Directory": "File", parser.retParent[parser.index].file_name);
     return (status == -1) ? -1 : writeDirHelper(parser.retParent);
 }
 
@@ -333,96 +334,6 @@ char* cleanPath(const char* srcPath) {
     return newStrPath;
 }
 
-fdDir* fs_opendir(const char *pathname) {
-    parsepath_st parser = { NULL, -1, "" };
-
-    if (parsePath(pathname, &parser) != 0 || parser.index < 0) {
-        printf("Error: Invalid path - index: %d \n", parser.index);
-        return NULL;}
-    if (!parser.retParent[parser.index].is_directory) {
-        printf("Error: Is not a directory: %d \n", parser.retParent[parser.index].is_directory);
-        return NULL;}
-    
-    fdDir* dirp = malloc(sizeof(fdDir));
-    if (dirp == NULL) return NULL;
-
-    dirp->d_reclen = 0;
-    dirp->dirEntryPosition = 0;
-    
-    dirp->de = loadDir(&parser.retParent[parser.index]);
-    if (dirp->de == NULL) return NULL;
-
-    dirp->di = malloc(sizeof(struct fs_diriteminfo));
-    if (dirp->di == NULL) return NULL;
-    printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
-    return dirp;
-}
-
-struct fs_diriteminfo* fs_readdir(fdDir* dirp) {
-    // printf(" *** fs_diriteminfo: Position: [%d] *** \n", dirp->dirEntryPosition);
-    
-    if (dirp == NULL || dirp->de == NULL || !dirp->de->is_used) {
-        return NULL;
-    }    
-    // If the last DE has been reached
-    if (dirp->dirEntryPosition >= sizeOfDE(dirp->de) - 1) return NULL;
-
-    printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
-            dirp->de->file_name,
-            dirp->de->file_size,
-            dirp->de->extents->startLoc,
-            dirp->de->is_used,
-            dirp->de->is_directory,
-            dirp->de->ext_length,
-            dirp->de->extents->countBlock);
-
-    // Populate fs_diriteminfo
-    // dirp->di->d_reclen = sizeof(struct fs_diriteminfo);
-    // dirp->di->fileType = (dirp->de->is_directory) ? '1': '0';
-    // strncpy(dirp->di->d_name, dirp->de->file_name, MAX_FILENAME - 1);
-    
-    // Move to the next entry in the de
-    dirp->de++;
-    dirp->dirEntryPosition++;
-
-    return dirp->di;
-}
-
-int fs_closedir(fdDir *dirp) {
-    if (dirp == NULL) return -1;
-    
-    // reset posistions
-    dirp->de-= dirp->dirEntryPosition;
-    dirp->dirEntryPosition = 0;
-
-    freePtr((void**) &dirp->di, "fdDir dir iteminfo");
-    freeDirectory(dirp->de);
-    freePtr((void**) &dirp, "fdDir");
-
-    return 0;
-}
-
-
-int fs_stat(const char *path, struct fs_stat *buf) {
-    parsepath_st parser = { NULL, -1, "" };
-    int isValid = parsePath(path, &parser);
-    
-    if (isValid != 0 || parser.index < 0) return -1;
-    memset(buf, 0, sizeof(fs_stat));
-
-    int countBlocks = 0;
-    for (size_t i = 0; i < parser.retParent->ext_length; i++) {
-        countBlocks += parser.retParent[parser.index].extents[i].countBlock;
-    }
-
-    buf->st_size = parser.retParent[parser.index].file_size;
-    buf->st_blocks = countBlocks;
-    buf->st_accesstime = parser.retParent[parser.index].access_time;
-    buf->st_modtime = parser.retParent[parser.index].modification_time;
-    buf->st_createtime = parser.retParent[parser.index].creation_time;
-    return 0;
-}
-
 
 /** Checks if a given path corresponds to a directory
  * @returns 0 if is directory, -1 if not
@@ -482,3 +393,298 @@ int makeDirOrFile(parsepath_st parser, int isDir, directory_entry* newDir){
     }
     return -1;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * The fs_stat Retrieves and populates file statistics for a given path.
+ * The path of the file or directory to be queried. Also, pointer to a structure
+ * where the file statistics will be stored.
+ * @returns 0 if path is valid, -1 if path is not valid
+ * @author Arvin Ghanizadeh
+ */
+int fs_stat(const char *path, struct fs_stat *buf)
+{
+    if (path == NULL || buf == NULL)
+    {
+        printf("Error: Path is invalid because it is NULL");
+        return -1;
+    }
+
+    parsepath_st parser = {NULL, -1, ""};
+    int isValid = parsePath(path, &parser);
+
+    if (isValid != 0 || parser.retParent == NULL)
+    {
+        printf("Error: The Path is invalid %s\n", path);
+        return -1;
+    }
+
+    buf->st_size = parser.retParent->file_size;
+
+    // TODO: needs further improvement since 4 Kilobytes is placehold.
+    // buf->st_blksize = (blksize_t)4096; // this is 4 Kilobytes
+    buf->st_blocks = (buf->st_size + MINBLOCKSIZE - 1) / MINBLOCKSIZE;
+
+    buf->st_createtime = parser.retParent->creation_time;
+    buf->st_modtime = parser.retParent->modification_time;
+    buf->st_accesstime = parser.retParent->access_time;
+
+    return 0;
+}
+
+/**
+ * Opens a directory at pathname. Initializes tracked attributes of a directory
+ * and returns a pointer to a new record in preparation for the file or directory's data.
+ * @returns Pointer to fdDir or NULL if directory does not exist or error occurs.
+ * @author Cheryl Fong
+ */
+fdDir *fs_opendir(const char *pathname)
+{
+    parsepath_st parser = {NULL, -1, ""};
+    int isValid = parsePath(pathname, &parser);
+
+    if (isValid != 0 || parser.retParent == NULL || !parser.retParent->is_directory)
+    {
+        printf("Error: no directory at %s\n", pathname);
+        return NULL;
+    }
+
+    fdDir *dirp = (fdDir *)malloc(sizeof(fdDir));
+    if (dirp == NULL)
+    {
+        printf("Error: fdDir malloc failed\n");
+        return NULL;
+    }
+
+    dirp->d_reclen = sizeof(directory_entry);
+    dirp->dirEntryPosition = 0;
+    dirp->de = parser.retParent;
+    dirp->di = NULL;
+
+    return dirp;
+}
+
+/**
+ * Retrieves the next directory entry in an "open" directory via dirp as input,
+ * and returns the directory or file details.
+ * @returns: Pointer to fs_diriteminfo or NULL when the end of the directory is
+ * reached or an error occurs.
+ * @author Cheryl Fong
+ */
+struct fs_diriteminfo *fs_readdir(fdDir *dirp)
+{
+
+    if (dirp == NULL || dirp->de == NULL || dirp->dirEntryPosition >= sizeOfDE(dirp->de))
+    {
+        return NULL;
+    }
+    directory_entry *currentEntry;
+
+    // vcb->cwdLoadDE is only populated when CD command is invoked
+    // otherwise use loaded Root  
+    if( vcb->cwdLoadDE == NULL){
+        currentEntry = &(dirp->de[dirp->dirEntryPosition]);
+    }else{
+        currentEntry = &(vcb->cwdLoadDE[dirp->dirEntryPosition]);
+    }
+
+    // ignore unused entries
+    if (!currentEntry->is_used)
+    {
+        dirp->dirEntryPosition++;
+        return fs_readdir(dirp);
+    }
+
+    // printf("CURR_DIR == %s\n",currentEntry->file_name);
+
+    // malloc and populate the fs_diriteminfo structure
+    if (dirp->di == NULL)
+    {
+        dirp->di = (struct fs_diriteminfo *)malloc(sizeof(struct fs_diriteminfo));
+        if (dirp->di == NULL)
+        {
+            printf("Error: Memory allocation for fs_diriteminfo failed\n");
+            return NULL;
+        }
+    }
+
+    // copy data from file's or dir's directory_entry to fdDir structure used by displayFiles
+    dirp->di->d_reclen = dirp->d_reclen;
+    dirp->di->fileType = currentEntry->is_directory ? 'D' : 'F';
+    strncpy(dirp->di->d_name, currentEntry->file_name, 255);
+    dirp->di->d_name[255] = '\0';
+
+    // move to next directory
+    dirp->dirEntryPosition++;
+    return dirp->di;
+}
+
+/**
+ * Closes an "open" directory and frees associated resources by freeing the
+ * pointer to the directory or file data record structure.
+ * @returns: 0 if success otherwise -1 if an error occurs.
+ * @author Cheryl Fong
+ */
+int fs_closedir(fdDir *dirp)
+{
+    if (dirp == NULL)
+    {
+        return -1;
+    }
+
+    if (dirp->di != NULL)
+    {
+        free(dirp->di);
+    }
+
+    free(dirp);
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////
+
+
+
+// fdDir* fs_opendir(const char *pathname) {
+//     parsepath_st parser = { NULL, -1, "" };
+
+//     if (parsePath(pathname, &parser) != 0 || parser.index < 0) {
+//         printf("Error: Invalid path - index: %d \n", parser.index);
+//         return NULL;}
+//     if (!parser.retParent[parser.index].is_directory) {
+//         printf("Error: Is not a directory: %d \n", parser.retParent[parser.index].is_directory);
+//         return NULL;}
+    
+//     fdDir* dirp = malloc(sizeof(fdDir));
+//     if (dirp == NULL) return NULL;
+
+//     dirp->d_reclen = 0;
+//     dirp->dirEntryPosition = 0;
+    
+//     dirp->de = loadDir(&parser.retParent[parser.index]);
+//     if (dirp->de == NULL) return NULL;
+
+//     dirp->di = malloc(sizeof(struct fs_diriteminfo));
+//     if (dirp->di == NULL) return NULL;
+//     printf("Name\t\tSize\t  LBA    Used  Type Ext  Count\n");
+//     return dirp;
+// }
+
+// struct fs_diriteminfo* fs_readdir(fdDir* dirp) {
+//     // printf(" *** fs_diriteminfo: Position: [%d] *** \n", dirp->dirEntryPosition);
+    
+//     if (dirp == NULL || dirp->de == NULL || !dirp->de->is_used) {
+//         return NULL;
+//     }    
+//     // If the last DE has been reached
+//     if (dirp->dirEntryPosition >= sizeOfDE(dirp->de) - 1) return NULL;
+
+//     printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+//             dirp->de->file_name,
+//             dirp->de->file_size,
+//             dirp->de->extents->startLoc,
+//             dirp->de->is_used,
+//             dirp->de->is_directory,
+//             dirp->de->ext_length,
+//             dirp->de->extents->countBlock);
+
+//     // Populate fs_diriteminfo
+//     // dirp->di->d_reclen = sizeof(struct fs_diriteminfo);
+//     // dirp->di->fileType = (dirp->de->is_directory) ? '1': '0';
+//     // strncpy(dirp->di->d_name, dirp->de->file_name, MAX_FILENAME - 1);
+    
+//     // Move to the next entry in the de
+//     dirp->de++;
+//     dirp->dirEntryPosition++;
+
+//     return dirp->di;
+// }
+
+// int fs_closedir(fdDir *dirp) {
+//     if (dirp == NULL) return -1;
+    
+//     // reset posistions
+//     dirp->de-= dirp->dirEntryPosition;
+//     dirp->dirEntryPosition = 0;
+
+//     freePtr((void**) &dirp->di, "fdDir dir iteminfo");
+//     freeDirectory(dirp->de);
+//     freePtr((void**) &dirp, "fdDir");
+
+//     return 0;
+// }
+
+
+// int fs_stat(const char *path, struct fs_stat *buf) {
+//     parsepath_st parser = { NULL, -1, "" };
+//     int isValid = parsePath(path, &parser);
+    
+//     if (isValid != 0 || parser.index < 0) return -1;
+//     memset(buf, 0, sizeof(fs_stat));
+
+//     int countBlocks = 0;
+//     for (size_t i = 0; i < parser.retParent->ext_length; i++) {
+//         countBlocks += parser.retParent[parser.index].extents[i].countBlock;
+//     }
+
+//     buf->st_size = parser.retParent[parser.index].file_size;
+//     buf->st_blocks = countBlocks;
+//     buf->st_accesstime = parser.retParent[parser.index].access_time;
+//     buf->st_modtime = parser.retParent[parser.index].modification_time;
+//     buf->st_createtime = parser.retParent[parser.index].creation_time;
+//     return 0;
+// }

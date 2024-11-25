@@ -183,7 +183,7 @@ int b_write (b_io_fd fd, char * buffer, int count)
 
 	// File is opened in write-only mode
     if ((fcbArray[fd].flags & O_WRONLY) != O_WRONLY) return -1;
-	if ( count == 0 ) return 0;
+	// if ( count == 0 ) return 0;
 
     // Allocate free space on disk and make sure the disk has enough space.
     if (!fcbArray[fd].fi->file_size) {
@@ -274,41 +274,6 @@ int b_close (b_io_fd fd)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /**
  * Transfers data from a file into the caller's buffer. It reads data in chunks and 
  * copies the requested number of bytes.
@@ -395,10 +360,12 @@ int readBuffer(int transferByte, b_io_fd fd, char *buffer) {
  * @author Danish Nguyen
  */
 int writeBuffer(int count, b_io_fd fd, char *buffer) {
-	
 	// Tracks the position in the caller's buffer for writing progress
 	int callerBufPos = 0;
 
+	// printf("writeBuffer: callerBufPos: %d \n", callerBufPos);
+	// if (fcbArray[fd].fi->file_size > 5000) return -1;
+	
 	// Loop until all bytes in the caller's buffer are written
 	while (count > 0) {
 
@@ -448,7 +415,7 @@ int writeBuffer(int count, b_io_fd fd, char *buffer) {
 		
 		// Count is smaller than the remaining data
 		memcpy(fcbArray[fd].buf + bufferPos, buffer + callerBufPos, count);
-
+		
 		fcbArray[fd].fi->file_size += count;
 		count = 0;
 		// No need to update buffer or LBA position as loop ends here
@@ -472,8 +439,9 @@ int commitBlocks(b_io_fd fd, int nBlocks, char* buffer, int callerBufPos){
 	int foundIdx = findLBAOnDisk(fd, fcbArray[fd].curLBAPos);
 	if (foundIdx == -1) {
 		
-	// printf("Error - findLBAOnDisk: [ %d | %d] \n", fd, fcbArray[fd].curLBAPos);
-		return -1;}
+		printf("Error - findLBAOnDisk: [ %d | %d] \n", fd, fcbArray[fd].curLBAPos);
+		return -1;
+	}
 
 	// Update current pos in file to account for the blocks being written
 	fcbArray[fd].curLBAPos += nBlocks;
@@ -489,11 +457,11 @@ int commitBlocks(b_io_fd fd, int nBlocks, char* buffer, int callerBufPos){
 		// Go through the file's extents (continuous sections of blocks on the disk)
 		// for (size_t i = 0; i < fcbArray[fd].fi->ext_length; i++) {
 			
-		// 	// printf("[%d: %d] | nBlock: %d, calBufPos:%d \n", 
-		// 	// 			fcbArray[fd].fi->extents[i].startLoc, 
-		// 	// 			fcbArray[fd].fi->extents[i].countBlock, 
-		// 	// 			nBlocks,
-		// 	// 			callerBufPos);
+			// printf("[%d: %d] | nBlock: %d, calBufPos:%d \n", 
+			// 			fcbArray[fd].fi->extents->startLoc, 
+			// 			fcbArray[fd].fi->extents->countBlock, 
+			// 			nBlocks,
+			// 			callerBufPos);
 		
 		// Skip extents that don't match the current disk position.
 		// 	if (fcbArray[fd].fi->extents[i].startLoc != foundIdx) continue;
@@ -514,17 +482,18 @@ int commitBlocks(b_io_fd fd, int nBlocks, char* buffer, int callerBufPos){
 		
 		int writeBlocks = LBAwrite(buffer + callerBufPos, nBlocks, foundIdx);
 		if (writeBlocks < nBlocks) {
-			// printf("Error - writeBlocks \n");
-			return -1;}
+			printf("Error - writeBlocks \n");
+			return -1;
+		}
 		
 		return 0;
 	}
 
 	// Write buffer to disk
 	int writeBlocks = LBAwrite(fcbArray[fd].buf, 1, foundIdx);
-	if (writeBlocks < 1) {
-		// printf("Error - LBAwrite \n");
-		return -1;}
+
+	printf("LBAwrite: buff: %ld | fileSize: %d | foundIdx: %d \n", strlen( (char*) fcbArray[fd].buf), fcbArray[fd].fi->file_size, foundIdx);
+	if (writeBlocks < 1) return -1;
 
 	memset(fcbArray[fd].buf, 0, B_CHUNK_SIZE);
 	// printf("#");

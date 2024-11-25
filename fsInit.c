@@ -60,14 +60,21 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
 
 		if (vcb->root_dir_ptr == NULL || vcb->free_space_map == NULL ) return -1;
 
-        // printf("============== [ %d ] =============\n", vcb->cwdLoadDE->extents->startLoc);
-        for (size_t i = 0; i < DIRECTORY_ENTRIES ; i++) {
-			if (vcb->root_dir_ptr[i].is_used == 1) {
-                printf("[ %s - %d ] \n", 
-                vcb->root_dir_ptr[i].file_name, 
-                vcb->root_dir_ptr[i].extents->startLoc);
-            }  
-		}
+        for (size_t i = 0; i < vcb->fs_st.extentLength; i++){
+            printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
+        }
+
+        printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
+        for (size_t i = 0; i < 5; i++){
+            printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+                vcb->root_dir_ptr[i].file_name,
+                vcb->root_dir_ptr[i].file_size,
+                vcb->root_dir_ptr[i].extents->startLoc,
+                vcb->root_dir_ptr[i].is_used,
+                vcb->root_dir_ptr[i].is_directory,
+                vcb->root_dir_ptr[i].ext_length,
+                vcb->root_dir_ptr[i].extents->countBlock);
+        }
 
 		// /* TEST ALLOCATE */
 		// extents_st test = allocateBlocks(19450, 0);

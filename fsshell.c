@@ -2,7 +2,7 @@
 * Class::  CSC-415-03 FALL 2024
 * Name:: Danish Nguyen, Atharva Walawalkar, Arvin Ghanizadeh, Cheryl Fong
 * Student IDs:: 923091933, 924254653, 922810925, 918157791
-* GitHub-Name:: dlikecoding
+* GitHub-Name:: dlikecoding, AtharvaWal2002, arvinghanizadeh, cherylfong
 * Group-Name:: 0xAACD
 * Project:: Basic File System
 *
@@ -348,7 +348,14 @@ int cmd_cp (int argcnt, char *argvec[])
 	testfs_dest_fd = b_open (dest, O_WRONLY | O_CREAT | O_TRUNC);
 	do 
 		{
+		// Return -1 if file name is not specify
+		if (testfs_dest_fd == -1) {
+			printf("Error - Failed to copy \"%s\" to \"%s\"\n", src, dest);
+			return -1;
+		}
+
 		readcnt = b_read (testfs_src_fd, buf, BUFFERLEN);
+		
 		b_write (testfs_dest_fd, buf, readcnt);
 		} while (readcnt == BUFFERLEN);
 	b_close (testfs_src_fd);
@@ -363,30 +370,6 @@ int cmd_cp (int argcnt, char *argvec[])
 int cmd_mv (int argcnt, char *argvec[])
 	{
 #if (CMDMV_ON == 1)				
-	// for (size_t i = 0; i < vcb->fs_st.extentLength; i++){
-	// 	printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
-	// }	
-
-	// printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
-    // for (size_t i = 0; i < 5; i++){
-
-	// 	 printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
-    //         vcb->root_dir_ptr[i].file_name,
-    //         vcb->root_dir_ptr[i].file_size,
-    //         vcb->root_dir_ptr[i].extents->startLoc,
-    //         vcb->root_dir_ptr[i].is_used,
-    //         vcb->root_dir_ptr[i].is_directory,
-    //         vcb->root_dir_ptr[i].ext_length,
-    //         vcb->root_dir_ptr[i].extents->countBlock);
-
-	// 	// if (!vcb->root_dir_ptr[i].ext_length) {
-	// 	// 	for (size_t i = 0; i < vcb->root_dir_ptr[i].ext_length; i++){
-	// 	// 		printf("[%d:%d] ", vcb->root_dir_ptr[i].extents[i].startLoc, vcb->root_dir_ptr[i].extents[i].countBlock);
-	// 	// 	}
-	// 	// 	printf("\n");
-	// 	// }
-	// }
-
 	char *src;
     char *dest;
 
@@ -402,18 +385,16 @@ int cmd_mv (int argcnt, char *argvec[])
     }
 
     if (cmd_cp(3, argvec) != 0) {
-        printf("Error - Failed to copy '%s' to '%s'.\n", src, dest);
+        printf("Error - Failed to copy \"%s\" to \"%s\"\n", src, dest);
         return -1;
     }
 
-    // Remove the source file after successful copy
     char *rm_args[] = {"rm", src};
     if (cmd_rm(2, rm_args) != 0) {
-        printf("Error - Failed to remove source file '%s' after copying \n", src);
+        printf("Error - Failed to remove source \"%s\"\n", src);
         return -1;
     }
     return 0;
-	// **** TODO ****  For you to implement
 
 #endif
 	return 0;
@@ -503,6 +484,12 @@ int cmd_cp2l (int argcnt, char *argvec[])
 	linux_fd = open (dest, O_WRONLY | O_CREAT | O_TRUNC, PERMISSIONS);
 	do 
 		{
+		// Return -1 if file name is not specify
+		if (testfs_fd == -1) {
+			printf("Error - Failed to copy \"%s\" to \"%s\"\n", src, dest);
+			return -1;
+		}
+
 		readcnt = b_read (testfs_fd, buf, BUFFERLEN);
 		write (linux_fd, buf, readcnt);
 		} while (readcnt == BUFFERLEN);
@@ -547,12 +534,14 @@ int cmd_cp2fs (int argcnt, char *argvec[])
 	linux_fd = open (src, O_RDONLY);
 	do 
 		{
-		readcnt = read (linux_fd, buf, BUFFERLEN);
-		
 		// Return -1 if file name is not specify
-		if (testfs_fd == -1) return -1;
+		if (testfs_fd == -1) {
+			printf("Error - Failed to copy \"%s\" to \"%s\"\n", src, dest);
+			return -1;
+		}
+
+		readcnt = read (linux_fd, buf, BUFFERLEN);
 		b_write (testfs_fd, buf, readcnt);
-		
 		} while (readcnt == BUFFERLEN);
 	b_close (testfs_fd);
 	close (linux_fd);

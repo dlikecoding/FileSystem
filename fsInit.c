@@ -64,9 +64,11 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
             printf("FS: [%d: %d]\n", vcb->free_space_map[i].startLoc, vcb->free_space_map[i].countBlock);
         }
 
-        printf("Name\t\tSize\t LBA   Used Type Ext  Count\n");
-        for (size_t i = 0; i < 5; i++){
-            printf("%s\t\t%-8d   %-5d %3d  %3d  %3d    %-5d\n", 
+        printf("Name\t\tSize     LBA    Used Type Ext  Count\n");
+        for (size_t i = 0; i < DIRECTORY_ENTRIES; i++){
+            if (!vcb->root_dir_ptr[i].is_used) continue;
+            
+            printf("%-9s\t%-8d %-5d %3d  %3d  %3d    %-5d\n", 
                 vcb->root_dir_ptr[i].file_name,
                 vcb->root_dir_ptr[i].file_size,
                 vcb->root_dir_ptr[i].extents->startLoc,
@@ -74,6 +76,12 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
                 vcb->root_dir_ptr[i].is_directory,
                 vcb->root_dir_ptr[i].ext_length,
                 vcb->root_dir_ptr[i].extents->countBlock);
+            
+            // if (vcb->root_dir_ptr[i].ext_length < 2) continue;
+
+            // for (size_t j = 0; j < vcb->root_dir_ptr[i].ext_length ; j++) {
+            //     printf("EXT: [ %d | %d ]\n", vcb->root_dir_ptr[i].extents[j].startLoc, vcb->root_dir_ptr[i].extents[j].countBlock);
+            // }
         }
 
 		// /* TEST ALLOCATE */
@@ -135,7 +143,6 @@ int initFileSystem (uint64_t numberOfBlocks, uint64_t blockSize)
     vcb->root_loc = vcb->root_dir_ptr->extents[0].startLoc;
     
     // Initialize current working directory pointer
-    // vcb->cwdLoadDE = vcb->root_dir_ptr;
 
     printf("\n --- Total Blocks Free: %d - Extent Length: %d - terExtTBLoc: %d --- \n", 
                             vcb->fs_st.totalBlocksFree, 

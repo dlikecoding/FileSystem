@@ -19,6 +19,7 @@
 #include "structs/FreeSpace.h"
 #include "mfs.h"
 
+
 typedef int b_io_fd;
 
 b_io_fd b_open (char * filename, int flags);
@@ -27,13 +28,18 @@ int b_write (b_io_fd fd, char * buffer, int count);
 int b_seek (b_io_fd fd, off_t offset, int whence);
 int b_close (b_io_fd fd);
 
+typedef struct LBAFinder {
+	int foundLBA;
+	int remain;
+} LBAFinder;
+
 int writeBuffer(int count, b_io_fd fd, char* buffer);
 
 int readBuffer(int count, b_io_fd fd, char* buffer);
 
 int commitBlocks(b_io_fd fd, int nBlocks, char* buf, int calPos);
 
-int findLBAOnDisk(b_io_fd fd, int idxLBA);
+LBAFinder findLBAOnDisk(b_io_fd fd, int idxLBA);
 int allocateFSBlocks(b_io_fd fd);
 
 int trimBlocks(b_io_fd fd);

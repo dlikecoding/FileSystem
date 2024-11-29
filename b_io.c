@@ -31,13 +31,14 @@
 typedef struct b_fcb
 	{
 	/** TODO add al the information you need in the file control block **/
-	int buflen;		//holds how many valid bytes are in the buffer
+	// int buflen;	//holds how many valid bytes are in the buffer
 	int index;		//holds the current position in the buffer
 
 	int curLBAPos; 	// Tracks the current LBA position in file
 	int curBlockIdx; // Tracks the current Block have read to bufferData 
 	int totalBlocks; // Total blocks allocated on disk
 	int nBlocks;  // Number of blocks allocate on disk - need to update on average file size
+	
 	int flags;		
 
 	int parentIdx; // parent DE's index
@@ -89,7 +90,6 @@ b_io_fd b_getFCB ()
  */
 b_io_fd b_open (char * filename, int flags)
 	{
-	//*** TODO ***:  Modify to save or set any information needed
 	if (startup == 0) b_init();  //Initialize our system
 	
 	b_io_fd returnFd = b_getFCB();		// get our own file descriptor
@@ -109,7 +109,7 @@ b_io_fd b_open (char * filename, int flags)
 		printf("Error - please provide a valid file name\n");
 		return -1;
 	}
-
+	
 	if (parser.retParent[parser.index].is_directory) return -1;
 		
 	if (parser.index == -1 && ((flags & O_CREAT) == O_CREAT)) {
@@ -156,11 +156,6 @@ b_io_fd b_open (char * filename, int flags)
 
 	fcbArray[returnFd].curLBAPos = 0;
 
-	
-	/////////////////////////////
-	fcbArray[returnFd].buflen = 0;
-	/////////////////////////////
-
 	return returnFd;  // all set
 
 	}
@@ -197,19 +192,9 @@ int b_write (b_io_fd fd, char * buffer, int count)
     if ((fcbArray[fd].flags & O_WRONLY) != O_WRONLY) return -1;
 
     // Allocate free space on disk and make sure the disk has enough space.
-    if (fcbArray[fd].fi->file_size == fcbArray[fd].index) {
-		extents_st fileExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
-
-		if (!fileExt.size || !fileExt.extents) {
-			printf("Error - Unable to write: Disk is full\n");
-			return -1;
-		}
-
-		memcpy(fcbArray[fd].fi->extents, fileExt.extents, fileExt.size * sizeof(extent_st));
-        fcbArray[fd].fi->ext_length = fileExt.size;
+    if (fcbArray[fd].fi->ext_length == 0) {
 		
-		freeExtents(&fileExt);
-		fcbArray[fd].totalBlocks += fcbArray[fd].nBlocks;
+		if (allocateFSBlocks(fd, 1) == -1) return -1;
 		printf("Start writing data to disk...\n");
 	}
 
@@ -263,27 +248,6 @@ int b_read (b_io_fd fd, char * buffer, int count)
 	return ( status == 0 ) ? transferred : status;
 	}
 	
-
-// Interface to Close the file	
-int b_close (b_io_fd fd)
-	{
-	printf("============== fcbArray[fd].index: %d ===============\n", fcbArray[fd].index);
-	
-	// printf("index: %d | Size: %d\n", fcbArray[fd].index, fcbArray[fd].fi->file_size);
-	if ( (fcbArray[fd].flags & O_WRONLY) == O_WRONLY ) {
-		if (fcbArray[fd].index > fcbArray[fd].fi->file_size) {
-			if (commitBlocks(fd, 1, NULL, 0) == -1) return -1;
-		}
-		if (trimBlocks(fd) == -1) return -1;
-		if (writeDirHelper(fcbArray[fd].fi - fcbArray[fd].parentIdx) == -1) return -1;
-			
-	}
-	freePtr((void**) &fcbArray[fd].buf, "FCB buffer");
-
-	return 0;
-	}
-
-
 
 /**
  * Transfers data from a file into the caller's buffer. It reads data in chunks and 
@@ -410,8 +374,7 @@ int writeBuffer(int count, b_io_fd fd, char *buffer) {
 		// If count is greater than the data left in the current block, transfer the 
 		// remaining data in the current block. Update the index, LBAPos, and the caller's buffer position. 
 		if (count > remainFCBBuffer) {
-			// printf("C > remain - bufferPos: %d | callerBufPos: %d | remainFCBBuffer: %d\n",  bufferPos, callerBufPos, remainFCBBuffer);
-    
+
 			memcpy(fcbArray[fd].buf + bufferPos, buffer + callerBufPos, remainFCBBuffer);
 			
 			// Write the current buffer block to disk and reset the buffer.
@@ -426,9 +389,7 @@ int writeBuffer(int count, b_io_fd fd, char *buffer) {
 			callerBufPos += remainFCBBuffer;
 			continue;
 		}
-		
-		// printf("ELSE - bufferPos: %d | callerBufPos: %d | count: %d\n",  bufferPos, callerBufPos, count);
-    
+
 		// Count is smaller than the remaining data
 		memcpy(fcbArray[fd].buf + bufferPos, buffer + callerBufPos, count);
 		
@@ -436,8 +397,7 @@ int writeBuffer(int count, b_io_fd fd, char *buffer) {
 		count = 0;
 		// No need to update buffer or LBA position as loop ends here
 	}
-	// printf("fileSize: %d | Index: %d | count: %d\n",  fcbArray[fd].fi->file_size, fcbArray[fd].index, count);
-    
+	
 	return 0;
 }
 
@@ -449,7 +409,7 @@ int commitBlocks(b_io_fd fd, int nBlocks, char* buffer, int callerBufPos){
 	// Check if the file has enough space before start writting data.
 	// If there's not enough space, try to allocate more disk blocks for the file
 	if ( (fcbArray[fd].curLBAPos + nBlocks) > (fcbArray[fd].totalBlocks - 1)) {
-		if ( allocateFSBlocks(fd) == -1 ) return -1;
+		if ( allocateFSBlocks(fd, 2) == -1 ) return -1;
 	} 
 	
 	// Update file size on commit
@@ -516,42 +476,51 @@ int commitBlocks(b_io_fd fd, int nBlocks, char* buffer, int callerBufPos){
  * @return 0 on success, -1 if allocation fails
  * @author Danish Nguyen
  */
-int allocateFSBlocks(b_io_fd fd){
+int allocateFSBlocks(b_io_fd fd, int n){
 
 	// Double the number of blocks to allocate compared to the last request
-	fcbArray[fd].nBlocks *= 2;
+	fcbArray[fd].nBlocks *= n;
 
-	// - Request allocation of new blocks from the disk
+	// Request allocation of free blocks from the disk
 	extents_st fileExt = allocateBlocks(fcbArray[fd].nBlocks, 0);
 	if (!fileExt.size || !fileExt.extents) {
 		printf("Not enough space on disk\n");
 		return -1;
 	}
 
-	// Update total block count for the file
+	// Update the total block count for the file
 	fcbArray[fd].totalBlocks += fcbArray[fd].nBlocks;
 	
-	// - Merge the newly allocated blocks with the file's existing extents (if possible)
+	// If the file is newly created, add the new extent to the current file
+	if (fcbArray[fd].fi->ext_length == 0) {
+		memcpy(fcbArray[fd].fi->extents, fileExt.extents, fileExt.size * sizeof(extent_st));
+        fcbArray[fd].fi->ext_length = fileExt.size;
+		
+		freeExtents(&fileExt);
+		return 0;
+	}
+
+	// Merge the newly allocated blocks with the file's existing extents (if possible)
 	// Get the last extent of the file to check if the new blocks can be merged	
 	int lastIdx = fcbArray[fd].fi->ext_length - 1;
 	
 	int lastStart = fcbArray[fd].fi->extents[lastIdx].startLoc;
 	int lastCount = fcbArray[fd].fi->extents[lastIdx].countBlock;
 	
-	int index = 1; // Counter for how many new extents are added
+	int index = 1; // Counter for the number of new extents added
 
-	// Go through the newly allocated extents
+	// Iterate through the newly allocated extents
 	for (size_t i = 0; i < fileExt.size; i++) {
 		int start = fileExt.extents[i].startLoc;
 		int count = fileExt.extents[i].countBlock;
 
-		// if the new extent directly follows the last extent, merge them
+		// If the new extent directly follows the last extent, merge them
 		if (lastStart + lastCount == start) {
 			fcbArray[fd].fi->extents[lastIdx].countBlock += count;
-			continue; // Need to check on what index need to skip
+			continue; // Skip to the next extent as it has been merged
 		}
 
-		// Otherwise, add new extent as a separate entry
+		// Otherwise, add the new extent as a separate entry
 		fcbArray[fd].fi->extents[lastIdx + index].startLoc = start;
 		fcbArray[fd].fi->extents[lastIdx + index].countBlock = count;
 		index++;
@@ -656,3 +625,123 @@ LBAFinder findLBAOnDisk(b_io_fd fd, int idxLBA) {
     }
     return (LBAFinder) {-1, 0};
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Interface to Close the file	
+int b_close (b_io_fd fd)
+	{	
+	// printf("index: %d | Size: %d\n", fcbArray[fd].index, fcbArray[fd].fi->file_size);
+	if ( (fcbArray[fd].flags & O_WRONLY) == O_WRONLY ) {
+		if (fcbArray[fd].index > fcbArray[fd].fi->file_size) {
+			if (commitBlocks(fd, 1, NULL, 0) == -1) return -1;
+		}
+		if (trimBlocks(fd) == -1) return -1;
+		if (writeDirHelper(fcbArray[fd].fi - fcbArray[fd].parentIdx) == -1) return -1;
+			
+	}
+	freePtr((void**) &fcbArray[fd].buf, "FCB buffer");
+
+	return 0;
+	}
+

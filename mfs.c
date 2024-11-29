@@ -22,7 +22,7 @@
  * returns a pointer to the parent directory, the last element (file or directory name), 
  * and the index of the last element within the path.
  * @return 0 on success or -1 on failure
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 int parsePath(const char *path, parsepath_st* parser) {
     if (path == NULL || strlen(path) == 0) return -1; // Invalid path
@@ -84,7 +84,7 @@ int parsePath(const char *path, parsepath_st* parser) {
 
 /** Finds an entry in a directory by name 
  * @return index if found, -1 if not found
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */ 
 int findInDir(directory_entry *de, char *name) {
     if (de == NULL || name == NULL) return -2; // Invalid input
@@ -100,7 +100,7 @@ int findInDir(directory_entry *de, char *name) {
 
 
 /** Frees a directory entry but skip the root or current working directory.
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 void freeDirectory(directory_entry *dir) {
     // Don't free global directories
@@ -220,7 +220,7 @@ int fs_mkdir(const char *pathname, mode_t mode) {
 
 /** Get current working directory
  * @returns the current working directory as a string in pathname
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 char* fs_getcwd(char *pathname, size_t size) {
     strncpy(pathname, vcb->cwdStrPath, size);  //copy CWD string with size limit
@@ -280,7 +280,7 @@ int fs_setcwd(char *pathname) {
 /** Sanitized a given path by processing each directory level, resolving any "." 
  * (current directory) or ".." (parent directory) references, and building a clean, 
  * absolute path. Result updates cwd path and stored in vcb->cwdStrPath
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 char* cleanPath(const char* srcPath) {
     char *tokens[MAX_PATH_LENGTH];  // Array to store tokens (DE's names)
@@ -337,7 +337,7 @@ char* cleanPath(const char* srcPath) {
 
 /** Checks if a given path corresponds to a directory
  * @returns 0 if is directory, -1 if not
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 int fs_isDir(char *path) {
     parsepath_st parser = { NULL, -1, "" };
@@ -349,7 +349,7 @@ int fs_isDir(char *path) {
 
 /** Checks if a given path corresponds to a directory
  * @returns 0 if is file, -1 if not
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 int fs_isFile(char *path) {
     return ( !fs_isDir(path) );
@@ -357,7 +357,7 @@ int fs_isFile(char *path) {
 
 /** Create new file or directory
  * @returns index in parent DE on success, 0 on failure
- * @anchor Danish Nguyen
+ * @author Danish Nguyen
  */
 int makeDirOrFile(parsepath_st parser, int isDir, directory_entry* newDir){
     /** Iterates through the parent directory to find an unused entry.

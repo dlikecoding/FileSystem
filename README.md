@@ -137,27 +137,4 @@ The provided shell (`fsshell.c`) supports the following commands (customizable):
 | `history` | Command history                    |
 | `help`    | Help menu                          |
 
-## Submission Requirements (via GitHub)
 
-Your GitHub repository must include:
-
-* Source files (`.c`, `.h`)
-* Customized driver program (`fsshell.c`)
-* `Makefile`
-* Volume file (max 10MB)
-
-Include a PDF Write-up with:
-
-* GitHub repository link
-* Design and implementation details per phase
-* Explanation of filesystem internals
-* Functionality overview with screenshots
-* Issues and solutions encountered
-
-Individual submissions:
-
-* Individual report form (submitted separately via Canvas)
-
----
-
-Ensure your GitHub repository reflects the full scope of your filesystem design, clearly documenting implementation choices and functionality.

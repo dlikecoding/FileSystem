@@ -1,7 +1,3 @@
-Here's a concise and structured README.md for your filesystem project:
-
----
-
 # Basic File System Project (CSC415)
 
 A multi-phase group assignment in C focused on designing and implementing a functional filesystem on a virtual disk using Ubuntu Linux.
